@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisTrailsJL → VisFlow Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .subtitle {
+            color: #666;
+            margin-top: -10px;
+            margin-bottom: 20px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 250px 200px 1fr;
+            gap: 20px;
+        }
+        .sidebar, .version-panel, .main-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .sidebar h3, .version-panel h3 {
+            margin-top: 0;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #666;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .vistrail-list {
+            list-style: none;
+            padding: 0;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .vistrail-item {
+            padding: 8px;
+            margin: 3px 0;
+            background: #f8f8f8;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 13px;
+        }
+        .vistrail-item:hover {
+            background: #e8e8e8;
+        }
+        .vistrail-item.active {
+            background: #4CAF50;
+            color: white;
+        }
+        .version-list {
+            list-style: none;
+            padding: 0;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .version-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f8f8;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 12px;
+            border-left: 3px solid #ddd;
+        }
+        .version-item:hover {
+            background: #e8e8e8;
+        }
+        .version-item.active {
+            background: #2196F3;
+            color: white;
+            border-left-color: #0d47a1;
+        }
+        .version-item.current {
+            border-left-color: #4CAF50;
+        }
+        .version-item.tagged {
+            border-left-color: #FF9800;
+            font-weight: 500;
+        }
+        .version-item .tag-name {
+            display: inline-block;
+            background: #FF9800;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            margin-bottom: 3px;
+        }
+        .version-item .version-id {
+            font-weight: bold;
+            color: #333;
+        }
+        .version-item.active .version-id {
+            color: white;
+        }
+        .workflow-info {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .workflow-info h2 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .workflow-info .badge {
+            display: inline-block;
+            background: #2196F3;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 8px;
+        }
+        .svg-container {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: auto;
+            margin: 20px 0;
+            background: white;
+            max-height: 600px;
+        }
+        .json-viewer {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 600px;
+        }
+        .json-viewer pre {
+            margin: 0;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+        }
+        .tab.active {
+            color: #2196F3;
+            border-bottom: 2px solid #2196F3;
+            margin-bottom: -2px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .version-stats {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 12px;
+        }
+        .version-stats strong {
+            color: #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <h1>VisTrailsJL → VisFlow Integration Demo</h1>
+    <p class="subtitle">Demonstrating version tree navigation and workflow visualization</p>
+
+    <div class="container">
+        <div class="sidebar">
+            <h3>Vistrails (Version Trees)</h3>
+            <ul class="vistrail-list" id="vistrailList">
+                <li class="loading">Loading vistrails...</li>
+            </ul>
+        </div>
+
+        <div class="version-panel">
+            <h3>Versions &amp; Tags</h3>
+            <div id="versionStats" style="display:none;" class="version-stats"></div>
+            <ul class="version-list" id="versionList">
+                <li class="loading">Select a vistrail</li>
+            </ul>
+        </div>
+
+        <div class="main-content">
+            <div id="workflowDisplay">
+                <p class="loading">Select a vistrail and version from the left panels</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        let currentVistrail = null;
+        let currentVersions = null;
+        let currentVersion = null;
+
+        // Load vistrail list
+        async function loadVistrails() {
+            try {
+                const response = await fetch(`${API_BASE}/workflows`);
+                const data = await response.json();
+
+                const list = document.getElementById('vistrailList');
+                list.innerHTML = '';
+
+                data.workflows.forEach(vistrail => {
+                    const li = document.createElement('li');
+                    li.className = 'vistrail-item';
+                    li.textContent = vistrail.name;
+                    li.onclick = () => loadVistrail(vistrail.id, li);
+                    list.appendChild(li);
+                });
+            } catch (error) {
+                document.getElementById('vistrailList').innerHTML =
+                    `<li class="error">Failed to load vistrails: ${error.message}</li>`;
+            }
+        }
+
+        // Load specific vistrail and its version tree
+        async function loadVistrail(vistrailId, element) {
+            // Update active state
+            document.querySelectorAll('.vistrail-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+
+            currentVistrail = vistrailId;
+
+            const versionList = document.getElementById('versionList');
+            versionList.innerHTML = '<li class="loading">Loading versions...</li>';
+
+            const display = document.getElementById('workflowDisplay');
+            display.innerHTML = '<p class="loading">Loading version tree...</p>';
+
+            try {
+                // Fetch version tree
+                const response = await fetch(`${API_BASE}/workflow/${vistrailId}/versions`);
+                const data = await response.json();
+
+                if (data.error) {
+                    versionList.innerHTML = `<li class="error">${data.error}</li>`;
+                    return;
+                }
+
+                currentVersions = data;
+
+                // Create a map of version_id to tags
+                const tagMap = {};
+                data.tags.forEach(tag => {
+                    if (!tagMap[tag.version_id]) {
+                        tagMap[tag.version_id] = [];
+                    }
+                    tagMap[tag.version_id].push(tag.name);
+                });
+
+                // Determine what to show
+                const hasTags = data.tags.length > 0;
+
+                // Show version statistics
+                const stats = document.getElementById('versionStats');
+                stats.style.display = 'block';
+                stats.innerHTML = `
+                    <strong>${data.count}</strong> version(s)
+                    ${data.tags.length > 0 ? `<br><strong>${data.tags.length}</strong> tagged` : ''}
+                    <br>Current: <strong>${data.current_version}</strong>
+                    ${hasTags ? '<br><br><button onclick="toggleAllVersions()" id="toggleBtn" style="padding:5px 10px;font-size:11px;cursor:pointer;background:#2196F3;color:white;border:none;border-radius:3px;">Show All Versions</button>' : ''}
+                `;
+
+                // Display versions
+                versionList.innerHTML = '';
+
+                if (hasTags) {
+                    // Show only tagged versions
+                    data.tags.forEach(tag => {
+                        const li = createVersionItem(tag.version_id, data.versions.find(v => v.id === tag.version_id),
+                                                     data.current_version, tag.name);
+                        versionList.appendChild(li);
+                    });
+
+                    // Store all versions for toggle
+                    window.allVersionsData = {
+                        versions: data.versions.sort((a, b) => b.id - a.id),
+                        tagMap: tagMap,
+                        currentVersion: data.current_version,
+                        showingAll: false
+                    };
+                } else {
+                    // Show current version first, then all others
+                    const currentVersionData = data.versions.find(v => v.id === data.current_version);
+                    if (currentVersionData) {
+                        const li = createVersionItem(data.current_version, currentVersionData, data.current_version, null);
+                        versionList.appendChild(li);
+
+                        // Add separator if there are other versions
+                        if (data.versions.length > 1) {
+                            const separator = document.createElement('li');
+                            separator.style.borderBottom = '2px solid #ddd';
+                            separator.style.margin = '10px 0';
+                            separator.style.padding = '5px 0';
+                            separator.innerHTML = '<small style="color:#666">Other Versions</small>';
+                            versionList.appendChild(separator);
+                        }
+                    }
+
+                    // Display all other versions (sorted by ID)
+                    const sortedVersions = [...data.versions].sort((a, b) => b.id - a.id);
+                    sortedVersions.forEach(version => {
+                        if (version.id !== data.current_version) {
+                            const li = createVersionItem(version.id, version, data.current_version, null);
+                            versionList.appendChild(li);
+                        }
+                    });
+                }
+
+                // Auto-load first tagged version if exists, otherwise current version
+                const firstVersion = hasTags ? data.tags[0].version_id : data.current_version;
+                loadWorkflowVersion(firstVersion);
+
+            } catch (error) {
+                versionList.innerHTML = `<li class="error">Failed to load versions: ${error.message}</li>`;
+            }
+        }
+
+        // Create version list item
+        function createVersionItem(versionId, versionData, currentVersion, tagName) {
+            const li = document.createElement('li');
+            li.className = 'version-item';
+
+            if (versionId === currentVersion) {
+                li.classList.add('current');
+            }
+            if (tagName) {
+                li.classList.add('tagged');
+            }
+
+            let html = '';
+            if (tagName) {
+                html += `<div class="tag-name">📌 ${tagName}</div>`;
+            }
+
+            html += `<div class="version-id">Version ${versionId}</div>`;
+
+            if (versionData) {
+                html += `<div style="font-size:10px;color:#666;margin-top:3px;">`;
+                if (versionData.user) html += `${versionData.user} `;
+                if (versionData.notes) html += `<br>${versionData.notes}`;
+                html += `</div>`;
+            }
+
+            li.innerHTML = html;
+            li.onclick = () => {
+                document.querySelectorAll('.version-item').forEach(el => el.classList.remove('active'));
+                li.classList.add('active');
+                loadWorkflowVersion(versionId);
+            };
+
+            return li;
+        }
+
+        // Load specific workflow version
+        async function loadWorkflowVersion(versionId) {
+            currentVersion = versionId;
+
+            const display = document.getElementById('workflowDisplay');
+            display.innerHTML = '<p class="loading">Loading workflow version...</p>';
+
+            try {
+                // Fetch JSON data for specific version
+                const jsonResponse = await fetch(`${API_BASE}/workflow/${currentVistrail}/version/${versionId}`);
+                const jsonData = await jsonResponse.json();
+
+                if (jsonData.error) {
+                    display.innerHTML = `
+                        <div class="error">
+                            <strong>Version ${versionId} not available</strong>
+                            <p>This version cannot be reconstructed. This may occur when:</p>
+                            <ul style="margin:10px 0; padding-left:20px;">
+                                <li>The version represents an incomplete or intermediate workflow state</li>
+                                <li>Required module packages are not loaded</li>
+                                <li>The action history cannot be fully replayed</li>
+                            </ul>
+                            <p><small>Try selecting a different version or a tagged version.</small></p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Fetch SVG for specific version
+                const svgResponse = await fetch(`${API_BASE}/workflow/${currentVistrail}/version/${versionId}/svg`);
+                const svgText = await svgResponse.text();
+
+                // Find tag for this version
+                const tag = currentVersions.tags.find(t => t.version_id === versionId);
+
+                // Display workflow
+                display.innerHTML = `
+                    <div class="workflow-info">
+                        <h2>${currentVistrail} ${tag ? `(${tag.name})` : ''}</h2>
+                        <span class="badge">Version ${versionId}</span>
+                        ${versionId === currentVersions.current_version ? '<span class="badge" style="background:#4CAF50">Current</span>' : ''}
+                        ${tag ? '<span class="badge" style="background:#FF9800">Tagged</span>' : ''}
+                        <p style="margin-top:10px;"><strong>Modules:</strong> ${jsonData.modules.length} • <strong>Connections:</strong> ${jsonData.connections.length}</p>
+                    </div>
+
+                    <div class="tabs">
+                        <button class="tab active" onclick="showTab('svg')">Workflow Visualization</button>
+                        <button class="tab" onclick="showTab('json')">JSON Data</button>
+                        <button class="tab" onclick="showTab('mapping')">VisFlow Mapping</button>
+                    </div>
+
+                    <div id="svg-tab" class="tab-content active">
+                        <div class="svg-container">
+                            ${svgText}
+                        </div>
+                    </div>
+
+                    <div id="json-tab" class="tab-content">
+                        <div class="json-viewer">
+                            <pre>${JSON.stringify(jsonData, null, 2)}</pre>
+                        </div>
+                    </div>
+
+                    <div id="mapping-tab" class="tab-content">
+                        <h3>Mapping VisTrailsJL to VisFlow Format</h3>
+                        <p>The VisTrailsJL JSON needs to be mapped to VisFlow's diagram format:</p>
+                        <div class="json-viewer">
+                            <pre>${JSON.stringify(createVisFlowMapping(jsonData), null, 2)}</pre>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                display.innerHTML = `<div class="error">Failed to load workflow: ${error.message}</div>`;
+            }
+        }
+
+        // Create VisFlow-compatible format
+        function createVisFlowMapping(vistrailsData) {
+            return {
+                // VisFlow expects nodes and edges
+                nodes: vistrailsData.modules.map(mod => ({
+                    id: mod.id.toString(),
+                    type: mod.name,
+                    label: mod.name,
+                    package: mod.package,
+                    x: mod.x,
+                    y: mod.y,
+                    inputs: mod.inputs,
+                    outputs: mod.outputs
+                })),
+                edges: vistrailsData.connections.map((conn, idx) => ({
+                    id: `edge-${idx}`,
+                    source: conn.source_id.toString(),
+                    sourcePort: conn.source_port,
+                    target: conn.target_id.toString(),
+                    targetPort: conn.target_port
+                })),
+                metadata: {
+                    source: 'VisTrailsJL',
+                    version_id: vistrailsData.version_id,
+                    vistrail: currentVistrail
+                }
+            };
+        }
+
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            event.target.classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+
+        // Toggle between tagged and all versions
+        function toggleAllVersions() {
+            if (!window.allVersionsData) return;
+
+            const versionList = document.getElementById('versionList');
+            const btn = document.getElementById('toggleBtn');
+            const data = window.allVersionsData;
+
+            if (data.showingAll) {
+                // Show only tagged versions
+                versionList.innerHTML = '';
+                currentVersions.tags.forEach(tag => {
+                    const li = createVersionItem(tag.version_id, data.versions.find(v => v.id === tag.version_id),
+                                                 data.currentVersion, tag.name);
+                    versionList.appendChild(li);
+                });
+                btn.textContent = 'Show All Versions';
+                data.showingAll = false;
+            } else {
+                // Show all versions
+                versionList.innerHTML = '';
+
+                // Tagged versions first
+                currentVersions.tags.forEach(tag => {
+                    const li = createVersionItem(tag.version_id, data.versions.find(v => v.id === tag.version_id),
+                                                 data.currentVersion, tag.name);
+                    versionList.appendChild(li);
+                });
+
+                // Separator
+                const separator = document.createElement('li');
+                separator.style.borderBottom = '2px solid #ddd';
+                separator.style.margin = '10px 0';
+                separator.style.padding = '5px 0';
+                separator.innerHTML = '<small style="color:#666">All Versions</small>';
+                versionList.appendChild(separator);
+
+                // All versions
+                data.versions.forEach(version => {
+                    const tag = data.tagMap[version.id] ? data.tagMap[version.id][0] : null;
+                    const li = createVersionItem(version.id, version, data.currentVersion, tag);
+                    versionList.appendChild(li);
+                });
+
+                btn.textContent = 'Show Tagged Only';
+                data.showingAll = true;
+            }
+        }
+
+        // Initialize
+        loadVistrails();
+    </script>
+</body>
+</html>

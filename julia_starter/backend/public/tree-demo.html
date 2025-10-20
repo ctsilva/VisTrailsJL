@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisTrails Version Tree Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: white;
+            border-right: 1px solid #ddd;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .vistrail-list {
+            list-style: none;
+        }
+
+        .vistrail-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .vistrail-item:hover {
+            background: #e9ecef;
+            transform: translateX(2px);
+        }
+
+        .vistrail-item.active {
+            background: #007bff;
+            color: white;
+            border-color: #0056b3;
+        }
+
+        .vistrail-name {
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .vistrail-stats {
+            font-size: 12px;
+            margin-top: 4px;
+            opacity: 0.7;
+        }
+
+        #treeDisplay {
+            max-width: 100%;
+            max-height: 100%;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+
+        #treeDisplay svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            color: #dc3545;
+            padding: 20px;
+            background: #f8d7da;
+            border-radius: 6px;
+            margin: 20px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h3>Version Trees (.vt files)</h3>
+            <ul class="vistrail-list" id="vistrailList"></ul>
+        </div>
+
+        <div class="main-content">
+            <div id="treeDisplay">
+                <div class="empty-state">
+                    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="50" cy="20" r="8" fill="#333"/>
+                        <circle cx="30" cy="50" r="8" fill="#333"/>
+                        <circle cx="70" cy="50" r="8" fill="#333"/>
+                        <circle cx="50" cy="80" r="8" fill="#333"/>
+                        <line x1="50" y1="28" x2="30" y2="42" stroke="#333" stroke-width="2"/>
+                        <line x1="50" y1="28" x2="70" y2="42" stroke="#333" stroke-width="2"/>
+                        <line x1="30" y1="58" x2="50" y2="72" stroke="#333" stroke-width="2"/>
+                        <line x1="70" y1="58" x2="50" y2="72" stroke="#333" stroke-width="2"/>
+                    </svg>
+                    <p>Select a version tree to visualize</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load list of vistrails
+        async function loadVistrails() {
+            try {
+                const response = await fetch('/api/workflows');
+                const data = await response.json();
+
+                const list = document.getElementById('vistrailList');
+                list.innerHTML = '';
+
+                data.workflows.forEach(vt => {
+                    const li = document.createElement('li');
+                    li.className = 'vistrail-item';
+                    li.innerHTML = `
+                        <div class="vistrail-name">${vt.name}</div>
+                        <div class="vistrail-stats">${(vt.size / 1024).toFixed(1)} KB</div>
+                    `;
+                    li.onclick = () => loadVersionTree(vt.id, li);
+                    list.appendChild(li);
+                });
+            } catch (error) {
+                console.error('Error loading vistrails:', error);
+            }
+        }
+
+        // Load and display version tree
+        async function loadVersionTree(vistrailId, element) {
+            try {
+                // Update active state
+                document.querySelectorAll('.vistrail-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                element.classList.add('active');
+
+                // Show loading state
+                const display = document.getElementById('treeDisplay');
+                display.innerHTML = '<div class="loading">Loading version tree...</div>';
+
+                // Fetch the SVG
+                const response = await fetch(`/api/workflow/${vistrailId}/tree/svg`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const svgContent = await response.text();
+                display.innerHTML = svgContent;
+
+            } catch (error) {
+                console.error('Error loading version tree:', error);
+                document.getElementById('treeDisplay').innerHTML =
+                    `<div class="error">Error loading version tree: ${error.message}</div>`;
+            }
+        }
+
+        // Initialize
+        loadVistrails();
+    </script>
+</body>
+</html>

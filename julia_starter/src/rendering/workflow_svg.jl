@@ -223,10 +223,16 @@ function render_pipeline_svg(pipeline::Pipeline;
     println(io)
 
     # Calculate sizes for each module based on label
+    # IMPORTANT: Calculate size AFTER scaling to ensure text fits in scaled boxes
     module_sizes = Dict{Int, Tuple{Float64, Float64}}()
     for (id, mod) in positioned_modules
         module_label = get(mod.annotations, "__desc__", mod.descriptor.name)
-        module_sizes[id] = calculate_module_size(module_label, module_width, module_height)
+        # Calculate text width in final scaled coordinates
+        text_width = estimate_text_width(module_label) / scale
+        # Add padding and enforce minimum
+        width = max(module_width, text_width + 40.0)
+        height = module_height
+        module_sizes[id] = (width, height)
     end
 
     # Render modules first (below connections)

@@ -259,9 +259,21 @@ function render_version_tree_svg(vistrail::Vistrail;
     println(io, "  <!-- Nodes -->")
     for (id, node) in nodes
         cx, cy = to_svg(node.x, node.y + node.height/2)
-        # Use minimum of scaled and unscaled width to prevent text overflow
-        # The layout computed proper widths for text, so we preserve them
-        rx = max(node.width / 2, node.width * scale / 2)
+
+        # Get label first to calculate proper width
+        label = string(id)
+        for tag in vistrail.tags
+            if tag.version_id == id
+                label = tag.name
+                break
+            end
+        end
+
+        # Calculate text width (12px font, ~7px per char + padding)
+        text_width = max(length(label) * 7.0 + 20.0, node.width * scale)
+
+        # Use the larger of computed node width or text width
+        rx = max(node.width * scale / 2, text_width / 2)
         ry = node.height * scale / 2
 
         # Determine node class
@@ -274,15 +286,6 @@ function render_version_tree_svg(vistrail::Vistrail;
             "version-node-tagged"
         else
             "version-node"
-        end
-
-        # Get label
-        label = string(id)
-        for tag in vistrail.tags
-            if tag.version_id == id
-                label = tag.name
-                break
-            end
         end
 
         println(io, "  <g class=\"version-group\" id=\"version-$id\">")

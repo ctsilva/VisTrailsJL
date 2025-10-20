@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisTrailsJL - Workflow Viewer</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        select, button {
+            padding: 10px 15px;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .workflow-display {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            background: #fafafa;
+            min-height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .workflow-display svg {
+            max-width: 100%;
+            height: auto;
+        }
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #bee5eb;
+            margin-bottom: 15px;
+        }
+        .endpoint-info {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔬 VisTrailsJL Workflow Viewer</h1>
+
+    <div class="container">
+        <div class="info">
+            <strong>Backend API:</strong> <span id="api-url">http://localhost:8000</span>
+            <br>
+            <strong>Status:</strong> <span id="api-status">Checking...</span>
+        </div>
+
+        <div class="controls">
+            <select id="workflow-select">
+                <option value="">Select a workflow...</option>
+            </select>
+
+            <button id="load-btn" onclick="loadWorkflow()" disabled>Load Workflow</button>
+            <button onclick="loadJSON()">View JSON</button>
+            <button onclick="checkAPI()">Check API Status</button>
+        </div>
+
+        <div class="endpoint-info" id="endpoint-info">
+            Endpoint: -
+        </div>
+
+        <div class="workflow-display" id="workflow-display">
+            <div class="loading">Select a workflow and click "Load Workflow"</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📋 Available Endpoints</h2>
+        <ul>
+            <li><code>GET /health</code> - Health check</li>
+            <li><code>GET /api/workflows</code> - List all workflows</li>
+            <li><code>GET /api/workflow/:id</code> - Get workflow as JSON</li>
+            <li><code>GET /api/workflow/:id/svg</code> - Get workflow as SVG ⭐ NEW</li>
+            <li><code>GET /api/workflow/:id/version/:version_id</code> - Get specific version as JSON</li>
+            <li><code>GET /api/workflow/:id/version/:version_id/svg</code> - Get version as SVG ⭐ NEW</li>
+            <li><code>GET /api/workflow/:id/versions</code> - Get version tree</li>
+        </ul>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        // Check API status on load
+        window.addEventListener('load', () => {
+            checkAPI();
+            loadWorkflowList();
+        });
+
+        async function checkAPI() {
+            const statusEl = document.getElementById('api-status');
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                statusEl.textContent = `✅ ${data.status} (${data.service})`;
+                statusEl.style.color = '#28a745';
+            } catch (error) {
+                statusEl.textContent = `❌ Offline - ${error.message}`;
+                statusEl.style.color = '#dc3545';
+            }
+        }
+
+        async function loadWorkflowList() {
+            const select = document.getElementById('workflow-select');
+            const loadBtn = document.getElementById('load-btn');
+
+            try {
+                const response = await fetch(`${API_URL}/api/workflows`);
+                const data = await response.json();
+
+                select.innerHTML = '<option value="">Select a workflow...</option>';
+                data.workflows.forEach(workflow => {
+                    const option = document.createElement('option');
+                    option.value = workflow.id;
+                    option.textContent = `${workflow.name} (${(workflow.size / 1024).toFixed(1)} KB)`;
+                    select.appendChild(option);
+                });
+
+                loadBtn.disabled = false;
+            } catch (error) {
+                showError('Failed to load workflow list: ' + error.message);
+            }
+        }
+
+        async function loadWorkflow() {
+            const select = document.getElementById('workflow-select');
+            const workflowId = select.value;
+
+            if (!workflowId) {
+                showError('Please select a workflow');
+                return;
+            }
+
+            const displayEl = document.getElementById('workflow-display');
+            const endpointEl = document.getElementById('endpoint-info');
+
+            displayEl.innerHTML = '<div class="loading">Loading workflow SVG...</div>';
+
+            const svgUrl = `${API_URL}/api/workflow/${workflowId}/svg`;
+            endpointEl.textContent = `Endpoint: GET ${svgUrl}`;
+
+            try {
+                const response = await fetch(svgUrl);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const svgContent = await response.text();
+                displayEl.innerHTML = svgContent;
+            } catch (error) {
+                showError('Failed to load workflow: ' + error.message);
+            }
+        }
+
+        async function loadJSON() {
+            const select = document.getElementById('workflow-select');
+            const workflowId = select.value;
+
+            if (!workflowId) {
+                showError('Please select a workflow');
+                return;
+            }
+
+            const jsonUrl = `${API_URL}/api/workflow/${workflowId}`;
+            window.open(jsonUrl, '_blank');
+        }
+
+        function showError(message) {
+            const displayEl = document.getElementById('workflow-display');
+            displayEl.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // Enable load button when workflow is selected
+        document.getElementById('workflow-select').addEventListener('change', function() {
+            document.getElementById('load-btn').disabled = !this.value;
+        });
+    </script>
+</body>
+</html>
