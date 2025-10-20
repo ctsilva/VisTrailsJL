@@ -19,3 +19,20 @@ vistrails.egg-info/
 
 # sphinx build
 doc/usersguide/_build/
+
+# Julia
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+/Manifest.toml
+/julia_starter/Manifest.toml
+
+# Julia packages (but keep our julia_starter/Manifest.toml for reproducibility)
+!julia_starter/Manifest.toml
+
+# VSCode
+.vscode/
+
+# Generated SVG outputs (keep examples)
+julia_starter/*.svg
+!julia_starter/examples/*.svg

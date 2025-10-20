@@ -1,0 +1,20 @@
+name = "VisTrailsJL"
+uuid = "e8c5a8d0-5f5e-4b1a-8c8e-9d5e7f8c9d0e"
+version = "0.1.0"
+authors = ["VisTrails Team"]
+
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+EzXML = "8f5d6c58-4d21-5cfd-889c-e3ad7ee6a615"
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+ZipFile = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
+
+[compat]
+EzXML = "1"
+HTTP = "1"
+JSON = "0.21"
+PyCall = "1.96.4"
+ZipFile = "0.10"
+julia = "1.6"

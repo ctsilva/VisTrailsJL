@@ -1,0 +1,793 @@
+<vistrail id="" name="" version="1.0.4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.vistrails.org/vistrail.xsd">
+  <action date="2014-02-04 22:51:03" id="1" prevId="0" session="0" user="dakoop">
+    <add id="0" objectId="0" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="0" name="CSVFile" namespace="read" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="1" objectId="0" parentObjId="0" parentObjType="module" what="location">
+      <location id="0" x="-180.0" y="139.0" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:51:10" id="2" prevId="1" session="0" user="dakoop">
+    <add id="2" objectId="1" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="1" name="HTTPFile" namespace="" package="org.vistrails.vistrails.http" version="0.9.1" />
+    </add>
+    <add id="3" objectId="1" parentObjId="1" parentObjType="module" what="location">
+      <location id="1" x="-241.0" y="217.0" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:51:10" id="3" prevId="2" session="0" user="dakoop">
+    <add id="4" objectId="0" parentObjId="" parentObjType="" what="connection">
+      <connection id="0" />
+    </add>
+    <add id="5" objectId="0" parentObjId="0" parentObjType="connection" what="port">
+      <port id="0" moduleId="1" moduleName="HTTPFile" name="file" signature="(org.vistrails.vistrails.basic:File)" type="source" />
+    </add>
+    <add id="6" objectId="1" parentObjId="0" parentObjType="connection" what="port">
+      <port id="1" moduleId="0" moduleName="CSVFile" name="file" signature="(org.vistrails.vistrails.basic:File)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:51:33" id="4" prevId="3" session="0" user="dakoop">
+    <change id="7" newObjId="2" oldObjId="0" parentObjId="0" parentObjType="module" what="location">
+      <location id="2" x="-173.0" y="135.0" />
+    </change>
+  </action>
+  <action date="2014-02-04 22:51:33" id="5" prevId="4" session="0" user="dakoop">
+    <add id="8" objectId="0" parentObjId="1" parentObjType="module" what="function">
+      <function id="0" name="url" pos="0" />
+    </add>
+    <add id="9" objectId="0" parentObjId="0" parentObjType="function" what="parameter">
+      <parameter alias="" id="0" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:String" val="http://web.mta.info/developers/data/nyct/fares/fares_140201.csv" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:51:42" id="6" prevId="5" session="0" user="dakoop">
+    <add id="10" objectId="2" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="2" name="TableCell" namespace="" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="11" objectId="3" parentObjId="2" parentObjType="module" what="location">
+      <location id="3" x="-90.0" y="28.0" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:51:42" id="7" prevId="6" session="0" user="dakoop">
+    <add id="12" objectId="1" parentObjId="" parentObjType="" what="connection">
+      <connection id="1" />
+    </add>
+    <add id="13" objectId="2" parentObjId="1" parentObjType="connection" what="port">
+      <port id="2" moduleId="0" moduleName="CSVFile" name="value" signature="(org.vistrails.vistrails.tabledata:read|CSVFile)" type="source" />
+    </add>
+    <add id="14" objectId="3" parentObjId="1" parentObjType="connection" what="port">
+      <port id="3" moduleId="2" moduleName="TableCell" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:51:45" id="8" prevId="7" session="0" user="dakoop">
+    <change id="15" newObjId="4" oldObjId="1" parentObjId="1" parentObjType="module" what="location">
+      <location id="4" x="-212.0" y="214.0" />
+    </change>
+    <change id="16" newObjId="5" oldObjId="3" parentObjId="2" parentObjType="module" what="location">
+      <location id="5" x="-151.0" y="31.0" />
+    </change>
+  </action>
+  <action date="2014-02-04 22:51:45" id="9" prevId="8" session="0" user="dakoop">
+    <change id="17" newObjId="6" oldObjId="2" parentObjId="0" parentObjType="module" what="location">
+      <location id="6" x="-178.666666667" y="126.666666667" />
+    </change>
+    <change id="18" newObjId="7" oldObjId="4" parentObjId="1" parentObjType="module" what="location">
+      <location id="7" x="-178.666666667" y="230.666666667" />
+    </change>
+    <change id="19" newObjId="8" oldObjId="5" parentObjId="2" parentObjType="module" what="location">
+      <location id="8" x="-178.666666667" y="22.6666666667" />
+    </change>
+  </action>
+  <action date="2014-02-04 22:52:45" id="10" prevId="9" session="0" user="dakoop">
+    <add id="20" objectId="1" parentObjId="0" parentObjType="module" what="function">
+      <function id="1" name="skip_lines" pos="0" />
+    </add>
+    <add id="21" objectId="1" parentObjId="1" parentObjType="function" what="parameter">
+      <parameter alias="" id="1" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:Integer" val="2" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:54:19" id="11" prevId="0" session="0" user="dakoop">
+    <add id="22" objectId="3" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="3" name="JSONFile" namespace="read" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="23" objectId="9" parentObjId="3" parentObjType="module" what="location">
+      <location id="9" x="-69.4110787172" y="97.0262390671" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:54:22" id="12" prevId="11" session="0" user="dakoop">
+    <add id="24" objectId="4" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="4" name="TableCell" namespace="" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="25" objectId="10" parentObjId="4" parentObjType="module" what="location">
+      <location id="10" x="-55.9766763848" y="12.6880466472" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:54:22" id="13" prevId="12" session="0" user="dakoop">
+    <add id="26" objectId="2" parentObjId="" parentObjType="" what="connection">
+      <connection id="2" />
+    </add>
+    <add id="27" objectId="4" parentObjId="2" parentObjType="connection" what="port">
+      <port id="4" moduleId="3" moduleName="JSONFile" name="value" signature="(org.vistrails.vistrails.tabledata:read|JSONFile)" type="source" />
+    </add>
+    <add id="28" objectId="5" parentObjId="2" parentObjType="connection" what="port">
+      <port id="5" moduleId="4" moduleName="TableCell" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:54:28" id="14" prevId="13" session="0" user="dakoop">
+    <add id="29" objectId="5" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="5" name="HTTPFile" namespace="" package="org.vistrails.vistrails.http" version="0.9.1" />
+    </add>
+    <add id="30" objectId="11" parentObjId="5" parentObjType="module" what="location">
+      <location id="11" x="-135.090379009" y="170.16909621" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:54:28" id="15" prevId="14" session="0" user="dakoop">
+    <add id="31" objectId="3" parentObjId="" parentObjType="" what="connection">
+      <connection id="3" />
+    </add>
+    <add id="32" objectId="6" parentObjId="3" parentObjType="connection" what="port">
+      <port id="6" moduleId="5" moduleName="HTTPFile" name="file" signature="(org.vistrails.vistrails.basic:File)" type="source" />
+    </add>
+    <add id="33" objectId="7" parentObjId="3" parentObjType="connection" what="port">
+      <port id="7" moduleId="3" moduleName="JSONFile" name="file" signature="(org.vistrails.vistrails.basic:File)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:54:53" id="16" prevId="15" session="0" user="dakoop">
+    <change id="34" newObjId="12" oldObjId="11" parentObjId="5" parentObjType="module" what="location">
+      <location id="12" x="-108.967930029" y="176.886297376" />
+    </change>
+  </action>
+  <action date="2014-02-04 22:54:53" id="17" prevId="16" session="0" user="dakoop">
+    <add id="35" objectId="2" parentObjId="5" parentObjType="module" what="function">
+      <function id="2" name="url" pos="0" />
+    </add>
+    <add id="36" objectId="2" parentObjId="2" parentObjType="function" what="parameter">
+      <parameter alias="" id="2" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:String" val="/vistrails/local_examples/mta_fares/stationlocations_dict.json" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:54:55" id="18" prevId="17" session="0" user="dakoop">
+    <change id="37" newObjId="13" oldObjId="9" parentObjId="3" parentObjType="module" what="location">
+      <location id="13" x="-78.1185617104" y="95.5335276968" />
+    </change>
+    <change id="38" newObjId="14" oldObjId="10" parentObjId="4" parentObjType="module" what="location">
+      <location id="14" x="-78.1185617104" y="-8.46647230321" />
+    </change>
+    <change id="39" newObjId="15" oldObjId="12" parentObjId="5" parentObjType="module" what="location">
+      <location id="15" x="-78.1185617104" y="199.533527697" />
+    </change>
+  </action>
+  <action date="2014-02-04 22:55:30" id="19" prevId="18" session="0" user="dakoop">
+    <change id="40" newObjId="3" oldObjId="2" parentObjId="2" parentObjType="function" what="parameter">
+      <parameter alias="" id="3" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:String" val="http://www.vistrails.org/download/download.php?type=DATA&amp;id=stationlocations_dict.json" />
+    </change>
+  </action>
+  <action date="2014-02-04 22:56:58" id="20" prevId="19" session="0" user="dakoop">
+    <delete id="41" objectId="4" parentObjId="2" parentObjType="connection" what="port" />
+    <delete id="42" objectId="5" parentObjId="2" parentObjType="connection" what="port" />
+    <delete id="43" objectId="2" parentObjId="" parentObjType="" what="connection" />
+    <delete id="44" objectId="14" parentObjId="4" parentObjType="module" what="location" />
+    <delete id="45" objectId="4" parentObjId="" parentObjType="" what="module" />
+  </action>
+  <action date="2014-02-04 22:57:04" id="21" prevId="20" session="0" user="dakoop">
+    <add id="46" objectId="6" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="6" name="GMapCell" namespace="" package="org.vistrails.vistrails.gmaps" version="0.1.0" />
+    </add>
+    <add id="47" objectId="16" parentObjId="6" parentObjType="module" what="location">
+      <location id="16" x="-76.1282798834" y="-0.746355685131" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:57:04" id="22" prevId="21" session="0" user="dakoop">
+    <add id="48" objectId="4" parentObjId="" parentObjType="" what="connection">
+      <connection id="4" />
+    </add>
+    <add id="49" objectId="8" parentObjId="4" parentObjType="connection" what="port">
+      <port id="8" moduleId="3" moduleName="JSONFile" name="value" signature="(org.vistrails.vistrails.tabledata:read|JSONFile)" type="source" />
+    </add>
+    <add id="50" objectId="9" parentObjId="4" parentObjType="connection" what="port">
+      <port id="9" moduleId="6" moduleName="GMapCell" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:57:05" id="23" prevId="22" session="0" user="dakoop">
+    <change id="51" newObjId="17" oldObjId="13" parentObjId="3" parentObjType="module" what="location">
+      <location id="17" x="-77.4551344347" y="98.1068999028" />
+    </change>
+    <change id="52" newObjId="18" oldObjId="15" parentObjId="5" parentObjType="module" what="location">
+      <location id="18" x="-77.4551344347" y="202.106899903" />
+    </change>
+    <change id="53" newObjId="19" oldObjId="16" parentObjId="6" parentObjType="module" what="location">
+      <location id="19" x="-77.4551344347" y="-5.89310009718" />
+    </change>
+  </action>
+  <action date="2014-02-04 22:57:27" id="24" prevId="23" session="0" user="dakoop">
+    <change id="54" newObjId="21" oldObjId="19" parentObjId="6" parentObjType="module" what="location">
+      <location id="21" x="-77.4551344347" y="-61.869776482" />
+    </change>
+  </action>
+  <action date="2014-02-04 22:57:27" id="25" prevId="24" session="0" user="dakoop">
+    <add id="55" objectId="7" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="7" name="ProjectTable" namespace="" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="56" objectId="20" parentObjId="7" parentObjType="module" what="location">
+      <location id="20" x="-133.597667638" y="17.9125364431" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:57:27" id="26" prevId="25" session="0" user="dakoop">
+    <add id="57" objectId="5" parentObjId="" parentObjType="" what="connection">
+      <connection id="5" />
+    </add>
+    <add id="58" objectId="10" parentObjId="5" parentObjType="connection" what="port">
+      <port id="10" moduleId="7" moduleName="ProjectTable" name="value" signature="(org.vistrails.vistrails.tabledata:Table)" type="source" />
+    </add>
+    <add id="59" objectId="11" parentObjId="5" parentObjType="connection" what="port">
+      <port id="11" moduleId="6" moduleName="GMapCell" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:57:30" id="27" prevId="26" session="0" user="dakoop">
+    <add id="60" objectId="6" parentObjId="" parentObjType="" what="connection">
+      <connection id="6" />
+    </add>
+    <add id="61" objectId="12" parentObjId="6" parentObjType="connection" what="port">
+      <port id="12" moduleId="3" moduleName="JSONFile" name="value" signature="(org.vistrails.vistrails.tabledata:read|JSONFile)" type="source" />
+    </add>
+    <add id="62" objectId="13" parentObjId="6" parentObjType="connection" what="port">
+      <port id="13" moduleId="7" moduleName="ProjectTable" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 22:57:31" id="28" prevId="27" session="0" user="dakoop">
+    <delete id="63" objectId="8" parentObjId="4" parentObjType="connection" what="port" />
+    <delete id="64" objectId="9" parentObjId="4" parentObjType="connection" what="port" />
+    <delete id="65" objectId="4" parentObjId="" parentObjType="" what="connection" />
+  </action>
+  <action date="2014-02-04 22:57:34" id="29" prevId="28" session="0" user="dakoop">
+    <change id="66" newObjId="22" oldObjId="20" parentObjId="7" parentObjType="module" what="location">
+      <location id="22" x="-85.084548105" y="17.9125364431" />
+    </change>
+  </action>
+  <action date="2014-02-04 22:57:34" id="30" prevId="29" session="0" user="dakoop">
+    <change id="67" newObjId="23" oldObjId="17" parentObjId="3" parentObjType="module" what="location">
+      <location id="23" x="-79.3624878523" y="116.064139942" />
+    </change>
+    <change id="68" newObjId="24" oldObjId="18" parentObjId="5" parentObjType="module" what="location">
+      <location id="24" x="-79.3624878523" y="220.064139942" />
+    </change>
+    <change id="69" newObjId="25" oldObjId="21" parentObjId="6" parentObjType="module" what="location">
+      <location id="25" x="-79.3624878523" y="-91.9358600583" />
+    </change>
+    <change id="70" newObjId="26" oldObjId="22" parentObjId="7" parentObjType="module" what="location">
+      <location id="26" x="-79.3624878523" y="12.0641399417" />
+    </change>
+  </action>
+  <action date="2014-02-04 22:57:44" id="31" prevId="30" session="0" user="dakoop">
+    <add id="71" objectId="3" parentObjId="7" parentObjType="module" what="function">
+      <function id="3" name="column_names" pos="0" />
+    </add>
+    <add id="72" objectId="4" parentObjId="3" parentObjType="function" what="parameter">
+      <parameter alias="" id="4" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:List" val="[&quot;lat&quot;, &quot;lng&quot;]" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:09:09" id="32" prevId="31" session="0" user="dakoop">
+    <annotation id="12" key="__description__" value="Paste" />
+    <add id="73" objectId="8" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="8" name="CSVFile" namespace="read" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="74" objectId="4" parentObjId="8" parentObjType="module" what="function">
+      <function id="4" name="skip_lines" pos="0" />
+    </add>
+    <add id="75" objectId="5" parentObjId="4" parentObjType="function" what="parameter">
+      <parameter alias="" id="5" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:Integer" val="2" />
+    </add>
+    <add id="76" objectId="27" parentObjId="8" parentObjType="module" what="location">
+      <location id="27" x="-71.6501457726" y="7.7084548105" />
+    </add>
+    <add id="77" objectId="9" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="9" name="HTTPFile" namespace="" package="org.vistrails.vistrails.http" version="0.9.1" />
+    </add>
+    <add id="78" objectId="5" parentObjId="9" parentObjType="module" what="function">
+      <function id="5" name="url" pos="0" />
+    </add>
+    <add id="79" objectId="6" parentObjId="5" parentObjType="function" what="parameter">
+      <parameter alias="" id="6" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:String" val="http://web.mta.info/developers/data/nyct/fares/fares_140201.csv" />
+    </add>
+    <add id="80" objectId="28" parentObjId="9" parentObjType="module" what="location">
+      <location id="28" x="-71.6501457726" y="111.70845481" />
+    </add>
+    <add id="81" objectId="7" parentObjId="" parentObjType="" what="connection">
+      <connection id="7" />
+    </add>
+    <add id="82" objectId="15" parentObjId="7" parentObjType="connection" what="port">
+      <port id="15" moduleId="8" moduleName="CSVFile" name="file" signature="(org.vistrails.vistrails.basic:File)" type="destination" />
+    </add>
+    <add id="83" objectId="14" parentObjId="7" parentObjType="connection" what="port">
+      <port id="14" moduleId="9" moduleName="HTTPFile" name="file" signature="(org.vistrails.vistrails.basic:File)" type="source" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:09:20" id="33" prevId="32" session="0" user="dakoop">
+    <change id="84" newObjId="29" oldObjId="23" parentObjId="3" parentObjType="module" what="location">
+      <location id="29" x="-33.0884353741" y="157.113702624" />
+    </change>
+    <change id="85" newObjId="30" oldObjId="24" parentObjId="5" parentObjType="module" what="location">
+      <location id="30" x="-33.0884353741" y="261.113702624" />
+    </change>
+    <change id="86" newObjId="31" oldObjId="27" parentObjId="8" parentObjType="module" what="location">
+      <location id="31" x="-244.804664723" y="157.725947522" />
+    </change>
+    <change id="87" newObjId="32" oldObjId="28" parentObjId="9" parentObjType="module" what="location">
+      <location id="32" x="-244.804664723" y="261.725947522" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:09:20" id="34" prevId="33" session="0" user="dakoop">
+    <delete id="88" objectId="12" parentObjId="6" parentObjType="connection" what="port" />
+    <delete id="89" objectId="13" parentObjId="6" parentObjType="connection" what="port" />
+    <delete id="90" objectId="6" parentObjId="" parentObjType="" what="connection" />
+  </action>
+  <action date="2014-02-04 23:09:29" id="35" prevId="34" session="0" user="dakoop">
+    <add id="91" objectId="10" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="10" name="JoinTables" namespace="" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="92" objectId="33" parentObjId="10" parentObjType="module" what="location">
+      <location id="33" x="-103.743440233" y="85.084548105" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:09:30" id="36" prevId="35" session="0" user="dakoop">
+    <add id="93" objectId="8" parentObjId="" parentObjType="" what="connection">
+      <connection id="8" />
+    </add>
+    <add id="94" objectId="16" parentObjId="8" parentObjType="connection" what="port">
+      <port id="16" moduleId="10" moduleName="JoinTables" name="value" signature="(org.vistrails.vistrails.tabledata:Table)" type="source" />
+    </add>
+    <add id="95" objectId="17" parentObjId="8" parentObjType="connection" what="port">
+      <port id="17" moduleId="7" moduleName="ProjectTable" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:09:30" id="37" prevId="36" session="0" user="dakoop">
+    <add id="96" objectId="9" parentObjId="" parentObjType="" what="connection">
+      <connection id="9" />
+    </add>
+    <add id="97" objectId="18" parentObjId="9" parentObjType="connection" what="port">
+      <port id="18" moduleId="8" moduleName="CSVFile" name="column_count" signature="(org.vistrails.vistrails.basic:Integer)" type="source" />
+    </add>
+    <add id="98" objectId="19" parentObjId="9" parentObjType="connection" what="port">
+      <port id="19" moduleId="10" moduleName="JoinTables" name="left_column_idx" signature="(org.vistrails.vistrails.basic:Integer)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:09:35" id="38" prevId="37" session="0" user="dakoop">
+    <delete id="99" objectId="18" parentObjId="9" parentObjType="connection" what="port" />
+    <delete id="100" objectId="19" parentObjId="9" parentObjType="connection" what="port" />
+    <delete id="101" objectId="9" parentObjId="" parentObjType="" what="connection" />
+  </action>
+  <action date="2014-02-04 23:09:42" id="39" prevId="38" session="0" user="dakoop">
+    <add id="102" objectId="10" parentObjId="" parentObjType="" what="connection">
+      <connection id="10" />
+    </add>
+    <add id="103" objectId="20" parentObjId="10" parentObjType="connection" what="port">
+      <port id="20" moduleId="8" moduleName="CSVFile" name="value" signature="(org.vistrails.vistrails.tabledata:read|CSVFile)" type="source" />
+    </add>
+    <add id="104" objectId="21" parentObjId="10" parentObjType="connection" what="port">
+      <port id="21" moduleId="10" moduleName="JoinTables" name="left_table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:09:46" id="40" prevId="39" session="0" user="dakoop">
+    <add id="105" objectId="11" parentObjId="" parentObjType="" what="connection">
+      <connection id="11" />
+    </add>
+    <add id="106" objectId="22" parentObjId="11" parentObjType="connection" what="port">
+      <port id="22" moduleId="3" moduleName="JSONFile" name="value" signature="(org.vistrails.vistrails.tabledata:read|JSONFile)" type="source" />
+    </add>
+    <add id="107" objectId="23" parentObjId="11" parentObjType="connection" what="port">
+      <port id="23" moduleId="10" moduleName="JoinTables" name="right_table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:09:54" id="41" prevId="40" session="0" user="dakoop">
+    <add id="108" objectId="6" parentObjId="10" parentObjType="module" what="function">
+      <function id="6" name="left_column_name" pos="0" />
+    </add>
+    <add id="109" objectId="7" parentObjId="6" parentObjType="function" what="parameter">
+      <parameter alias="" id="7" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:String" val="STATION" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:10:39" id="42" prevId="19" session="0" user="dakoop">
+    <annotation id="14" key="__description__" value="Paste" />
+    <add id="110" objectId="11" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="11" name="CSVFile" namespace="read" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="111" objectId="34" parentObjId="11" parentObjType="module" what="location">
+      <location id="34" x="-70.1574344023" y="39.055393586" />
+    </add>
+    <add id="112" objectId="12" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="12" name="HTTPFile" namespace="" package="org.vistrails.vistrails.http" version="0.9.1" />
+    </add>
+    <add id="113" objectId="7" parentObjId="12" parentObjType="module" what="function">
+      <function id="7" name="url" pos="0" />
+    </add>
+    <add id="114" objectId="8" parentObjId="7" parentObjType="function" what="parameter">
+      <parameter alias="" id="8" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:String" val="http://web.mta.info/developers/data/nyct/fares/fares_140201.csv" />
+    </add>
+    <add id="115" objectId="35" parentObjId="12" parentObjType="module" what="location">
+      <location id="35" x="-70.1574344023" y="143.055393586" />
+    </add>
+    <add id="116" objectId="12" parentObjId="" parentObjType="" what="connection">
+      <connection id="12" />
+    </add>
+    <add id="117" objectId="25" parentObjId="12" parentObjType="connection" what="port">
+      <port id="25" moduleId="11" moduleName="CSVFile" name="file" signature="(org.vistrails.vistrails.basic:File)" type="destination" />
+    </add>
+    <add id="118" objectId="24" parentObjId="12" parentObjType="connection" what="port">
+      <port id="24" moduleId="12" moduleName="HTTPFile" name="file" signature="(org.vistrails.vistrails.basic:File)" type="source" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:10:44" id="43" prevId="42" session="0" user="dakoop">
+    <change id="119" newObjId="36" oldObjId="14" parentObjId="4" parentObjType="module" what="location">
+      <location id="36" x="-122.153547133" y="-86.0874635569" />
+    </change>
+    <change id="120" newObjId="37" oldObjId="34" parentObjId="11" parentObjType="module" what="location">
+      <location id="37" x="-218.682215743" y="104.734693878" />
+    </change>
+    <change id="121" newObjId="38" oldObjId="35" parentObjId="12" parentObjType="module" what="location">
+      <location id="38" x="-218.682215743" y="208.734693878" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:10:44" id="44" prevId="43" session="0" user="dakoop">
+    <delete id="122" objectId="4" parentObjId="2" parentObjType="connection" what="port" />
+    <delete id="123" objectId="5" parentObjId="2" parentObjType="connection" what="port" />
+    <delete id="124" objectId="2" parentObjId="" parentObjType="" what="connection" />
+  </action>
+  <action date="2014-02-04 23:10:48" id="45" prevId="44" session="0" user="dakoop">
+    <add id="125" objectId="13" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="13" name="JoinTables" namespace="" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="126" objectId="39" parentObjId="13" parentObjType="module" what="location">
+      <location id="39" x="-133.597667638" y="-26.1224489796" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:10:48" id="46" prevId="45" session="0" user="dakoop">
+    <add id="127" objectId="13" parentObjId="" parentObjType="" what="connection">
+      <connection id="13" />
+    </add>
+    <add id="128" objectId="26" parentObjId="13" parentObjType="connection" what="port">
+      <port id="26" moduleId="13" moduleName="JoinTables" name="value" signature="(org.vistrails.vistrails.tabledata:Table)" type="source" />
+    </add>
+    <add id="129" objectId="27" parentObjId="13" parentObjType="connection" what="port">
+      <port id="27" moduleId="4" moduleName="TableCell" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:10:53" id="47" prevId="46" session="0" user="dakoop">
+    <change id="130" newObjId="40" oldObjId="39" parentObjId="13" parentObjType="module" what="location">
+      <location id="40" x="-133.597667638" y="-6.71720116618" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:10:53" id="48" prevId="47" session="0" user="dakoop">
+    <add id="131" objectId="14" parentObjId="" parentObjType="" what="connection">
+      <connection id="14" />
+    </add>
+    <add id="132" objectId="28" parentObjId="14" parentObjType="connection" what="port">
+      <port id="28" moduleId="11" moduleName="CSVFile" name="value" signature="(org.vistrails.vistrails.tabledata:read|CSVFile)" type="source" />
+    </add>
+    <add id="133" objectId="29" parentObjId="14" parentObjType="connection" what="port">
+      <port id="29" moduleId="13" moduleName="JoinTables" name="left_table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:10:54" id="49" prevId="48" session="0" user="dakoop">
+    <add id="134" objectId="15" parentObjId="" parentObjType="" what="connection">
+      <connection id="15" />
+    </add>
+    <add id="135" objectId="30" parentObjId="15" parentObjType="connection" what="port">
+      <port id="30" moduleId="3" moduleName="JSONFile" name="value" signature="(org.vistrails.vistrails.tabledata:read|JSONFile)" type="source" />
+    </add>
+    <add id="136" objectId="31" parentObjId="15" parentObjType="connection" what="port">
+      <port id="31" moduleId="13" moduleName="JoinTables" name="right_table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:11:01" id="50" prevId="49" session="0" user="dakoop">
+    <change id="137" newObjId="41" oldObjId="40" parentObjId="13" parentObjType="module" what="location">
+      <location id="41" x="-129.865889213" y="10.4489795918" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:11:01" id="51" prevId="50" session="0" user="dakoop">
+    <add id="138" objectId="8" parentObjId="13" parentObjType="module" what="function">
+      <function id="8" name="left_column_name" pos="0" />
+    </add>
+    <add id="139" objectId="9" parentObjId="8" parentObjType="function" what="parameter">
+      <parameter alias="" id="9" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:String" val="STATION" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:11:06" id="52" prevId="51" session="0" user="dakoop">
+    <add id="140" objectId="9" parentObjId="13" parentObjType="module" what="function">
+      <function id="9" name="right_column_name" pos="1" />
+    </add>
+    <add id="141" objectId="10" parentObjId="9" parentObjType="function" what="parameter">
+      <parameter alias="" id="10" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:String" val="_key" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:11:06" id="53" prevId="52" session="0" user="dakoop">
+    <change id="142" newObjId="42" oldObjId="13" parentObjId="3" parentObjType="module" what="location">
+      <location id="42" x="-67.1034985423" y="106.149659864" />
+    </change>
+    <change id="143" newObjId="43" oldObjId="36" parentObjId="4" parentObjType="module" what="location">
+      <location id="43" x="-140.103498542" y="-101.850340136" />
+    </change>
+    <change id="144" newObjId="44" oldObjId="15" parentObjId="5" parentObjType="module" what="location">
+      <location id="44" x="-63.1034985423" y="210.149659864" />
+    </change>
+    <change id="145" newObjId="45" oldObjId="37" parentObjId="11" parentObjType="module" what="location">
+      <location id="45" x="-218.103498542" y="106.149659864" />
+    </change>
+    <change id="146" newObjId="46" oldObjId="38" parentObjId="12" parentObjType="module" what="location">
+      <location id="46" x="-217.103498542" y="210.149659864" />
+    </change>
+    <change id="147" newObjId="47" oldObjId="41" parentObjId="13" parentObjType="module" what="location">
+      <location id="47" x="-140.103498542" y="2.14965986395" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:11:30" id="54" prevId="53" session="0" user="dakoop">
+    <add id="148" objectId="10" parentObjId="11" parentObjType="module" what="function">
+      <function id="10" name="skip_lines" pos="0" />
+    </add>
+    <add id="149" objectId="11" parentObjId="10" parentObjType="function" what="parameter">
+      <parameter alias="" id="11" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:Integer" val="2" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:12:45" id="55" prevId="54" session="0" user="dakoop">
+    <delete id="150" objectId="26" parentObjId="13" parentObjType="connection" what="port" />
+    <delete id="151" objectId="27" parentObjId="13" parentObjType="connection" what="port" />
+    <delete id="152" objectId="13" parentObjId="" parentObjType="" what="connection" />
+    <delete id="153" objectId="43" parentObjId="4" parentObjType="module" what="location" />
+    <delete id="154" objectId="4" parentObjId="" parentObjType="" what="module" />
+  </action>
+  <action date="2014-02-04 23:12:46" id="56" prevId="55" session="0" user="dakoop">
+    <annotation id="17" key="__description__" value="Paste" />
+    <add id="155" objectId="14" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="14" name="GMapCell" namespace="" package="org.vistrails.vistrails.gmaps" version="0.1.0" />
+    </add>
+    <add id="156" objectId="48" parentObjId="14" parentObjType="module" what="location">
+      <location id="48" x="-129.419951275" y="-5.14105212442" />
+    </add>
+    <add id="157" objectId="15" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="15" name="ProjectTable" namespace="" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="158" objectId="11" parentObjId="15" parentObjType="module" what="function">
+      <function id="11" name="column_names" pos="0" />
+    </add>
+    <add id="159" objectId="12" parentObjId="11" parentObjType="function" what="parameter">
+      <parameter alias="" id="12" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:List" val="[&quot;lat&quot;, &quot;lng&quot;]" />
+    </add>
+    <add id="160" objectId="49" parentObjId="15" parentObjType="module" what="location">
+      <location id="49" x="-129.419951275" y="98.8589478756" />
+    </add>
+    <add id="161" objectId="16" parentObjId="" parentObjType="" what="connection">
+      <connection id="16" />
+    </add>
+    <add id="162" objectId="33" parentObjId="16" parentObjType="connection" what="port">
+      <port id="33" moduleId="14" moduleName="GMapCell" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+    <add id="163" objectId="32" parentObjId="16" parentObjType="connection" what="port">
+      <port id="32" moduleId="15" moduleName="ProjectTable" name="value" signature="(org.vistrails.vistrails.tabledata:Table)" type="source" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:12:50" id="57" prevId="56" session="0" user="dakoop">
+    <change id="164" newObjId="50" oldObjId="48" parentObjId="14" parentObjType="module" what="location">
+      <location id="50" x="-132.767018981" y="-193.692532862" />
+    </change>
+    <change id="165" newObjId="51" oldObjId="49" parentObjId="15" parentObjType="module" what="location">
+      <location id="51" x="-132.767018981" y="-89.6925328619" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:12:50" id="58" prevId="57" session="0" user="dakoop">
+    <add id="166" objectId="17" parentObjId="" parentObjType="" what="connection">
+      <connection id="17" />
+    </add>
+    <add id="167" objectId="34" parentObjId="17" parentObjType="connection" what="port">
+      <port id="34" moduleId="13" moduleName="JoinTables" name="value" signature="(org.vistrails.vistrails.tabledata:Table)" type="source" />
+    </add>
+    <add id="168" objectId="35" parentObjId="17" parentObjType="connection" what="port">
+      <port id="35" moduleId="15" moduleName="ProjectTable" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:12:56" id="59" prevId="58" session="0" user="dakoop">
+    <change id="169" newObjId="13" oldObjId="12" parentObjId="11" parentObjType="function" what="parameter">
+      <parameter alias="" id="13" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:List" val="[&quot;lat&quot;, &quot;lng&quot;, &quot;FF&quot;]" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:12:58" id="60" prevId="59" session="0" user="dakoop">
+    <change id="170" newObjId="52" oldObjId="42" parentObjId="3" parentObjType="module" what="location">
+      <location id="52" x="-65.0073615247" y="109.623319085" />
+    </change>
+    <change id="171" newObjId="53" oldObjId="44" parentObjId="5" parentObjType="module" what="location">
+      <location id="53" x="-61.0073615247" y="213.623319085" />
+    </change>
+    <change id="172" newObjId="54" oldObjId="45" parentObjId="11" parentObjType="module" what="location">
+      <location id="54" x="-216.007361525" y="109.623319085" />
+    </change>
+    <change id="173" newObjId="55" oldObjId="46" parentObjId="12" parentObjType="module" what="location">
+      <location id="55" x="-215.007361525" y="213.623319085" />
+    </change>
+    <change id="174" newObjId="56" oldObjId="47" parentObjId="13" parentObjType="module" what="location">
+      <location id="56" x="-138.007361525" y="5.62331908514" />
+    </change>
+    <change id="175" newObjId="57" oldObjId="50" parentObjId="14" parentObjType="module" what="location">
+      <location id="57" x="-138.007361525" y="-202.376680915" />
+    </change>
+    <change id="176" newObjId="58" oldObjId="51" parentObjId="15" parentObjType="module" what="location">
+      <location id="58" x="-138.007361525" y="-98.3766809149" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:13:29" id="61" prevId="60" session="0" user="dakoop">
+    <add id="177" objectId="16" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="16" name="SheetReference" namespace="" package="org.vistrails.vistrails.spreadsheet" version="0.9.2" />
+    </add>
+    <add id="178" objectId="59" parentObjId="16" parentObjType="module" what="location">
+      <location id="59" x="-386.028475356" y="-58.0158402269" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:13:35" id="62" prevId="61" session="0" user="dakoop">
+    <add id="179" objectId="12" parentObjId="16" parentObjType="module" what="function">
+      <function id="12" name="SheetName" pos="0" />
+    </add>
+    <add id="180" objectId="14" parentObjId="12" parentObjType="function" what="parameter">
+      <parameter alias="" id="14" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:String" val="gmap" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:13:37" id="63" prevId="62" session="0" user="dakoop">
+    <add id="181" objectId="13" parentObjId="16" parentObjType="module" what="function">
+      <function id="13" name="MinColumnCount" pos="1" />
+    </add>
+    <add id="182" objectId="15" parentObjId="13" parentObjType="function" what="parameter">
+      <parameter alias="" id="15" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:Integer" val="1" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:13:42" id="64" prevId="63" session="0" user="dakoop">
+    <add id="183" objectId="14" parentObjId="16" parentObjType="module" what="function">
+      <function id="14" name="MinRowCount" pos="2" />
+    </add>
+    <add id="184" objectId="16" parentObjId="14" parentObjType="function" what="parameter">
+      <parameter alias="" id="16" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:Integer" val="1" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:13:52" id="65" prevId="64" session="0" user="dakoop">
+    <add id="185" objectId="17" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="17" name="CellLocation" namespace="" package="org.vistrails.vistrails.spreadsheet" version="0.9.2" />
+    </add>
+    <add id="186" objectId="60" parentObjId="17" parentObjType="module" what="location">
+      <location id="60" x="-380.45002918" y="-143.923911332" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:13:52" id="66" prevId="65" session="0" user="dakoop">
+    <add id="187" objectId="18" parentObjId="" parentObjType="" what="connection">
+      <connection id="18" />
+    </add>
+    <add id="188" objectId="36" parentObjId="18" parentObjType="connection" what="port">
+      <port id="36" moduleId="16" moduleName="SheetReference" name="self" signature="(org.vistrails.vistrails.spreadsheet:SheetReference)" type="source" />
+    </add>
+    <add id="189" objectId="37" parentObjId="18" parentObjType="connection" what="port">
+      <port id="37" moduleId="17" moduleName="CellLocation" name="SheetReference" signature="(org.vistrails.vistrails.spreadsheet:SheetReference)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:13:55" id="67" prevId="66" session="0" user="dakoop">
+    <change id="190" newObjId="61" oldObjId="60" parentObjId="17" parentObjType="module" what="location">
+      <location id="61" x="-355.904866007" y="-143.923911332" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:13:56" id="68" prevId="67" session="0" user="dakoop">
+    <add id="191" objectId="19" parentObjId="" parentObjType="" what="connection">
+      <connection id="19" />
+    </add>
+    <add id="192" objectId="38" parentObjId="19" parentObjType="connection" what="port">
+      <port id="38" moduleId="17" moduleName="CellLocation" name="self" signature="(org.vistrails.vistrails.spreadsheet:CellLocation)" type="source" />
+    </add>
+    <add id="193" objectId="39" parentObjId="19" parentObjType="connection" what="port">
+      <port id="39" moduleId="14" moduleName="GMapCell" name="Location" signature="(org.vistrails.vistrails.spreadsheet:CellLocation)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:14:06" id="69" prevId="68" session="0" user="dakoop">
+    <change id="194" newObjId="62" oldObjId="59" parentObjId="16" parentObjType="module" what="location">
+      <location id="62" x="-377.102961475" y="-18.9667169973" />
+    </change>
+    <change id="195" newObjId="63" oldObjId="61" parentObjId="17" parentObjType="module" what="location">
+      <location id="63" x="-351.442109067" y="-116.031680454" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:14:06" id="70" prevId="69" session="0" user="dakoop">
+    <add id="196" objectId="15" parentObjId="17" parentObjType="module" what="function">
+      <function id="15" name="Column" pos="0" />
+    </add>
+    <add id="197" objectId="17" parentObjId="15" parentObjType="function" what="parameter">
+      <parameter alias="" id="17" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:Integer" val="1" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:14:08" id="71" prevId="70" session="0" user="dakoop">
+    <add id="198" objectId="16" parentObjId="17" parentObjType="module" what="function">
+      <function id="16" name="Row" pos="1" />
+    </add>
+    <add id="199" objectId="18" parentObjId="16" parentObjType="function" what="parameter">
+      <parameter alias="" id="18" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:Integer" val="1" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:16:02" id="72" prevId="71" session="0" user="dakoop">
+    <change id="200" newObjId="64" oldObjId="57" parentObjId="14" parentObjType="module" what="location">
+      <location id="64" x="-149.638039798" y="-286.117564485" />
+    </change>
+    <change id="201" newObjId="65" oldObjId="62" parentObjId="16" parentObjType="module" what="location">
+      <location id="65" x="-388.733639749" y="-102.707600568" />
+    </change>
+    <change id="202" newObjId="66" oldObjId="63" parentObjId="17" parentObjType="module" what="location">
+      <location id="66" x="-363.07278734" y="-199.772564024" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:16:02" id="73" prevId="72" session="0" user="dakoop">
+    <delete id="203" objectId="33" parentObjId="16" parentObjType="connection" what="port" />
+    <delete id="204" objectId="32" parentObjId="16" parentObjType="connection" what="port" />
+    <delete id="205" objectId="16" parentObjId="" parentObjType="" what="connection" />
+  </action>
+  <action date="2014-02-04 23:16:14" id="74" prevId="73" session="0" user="dakoop">
+    <add id="206" objectId="18" parentObjId="" parentObjType="" what="module">
+      <module cache="1" id="18" name="SelectFromTable" namespace="" package="org.vistrails.vistrails.tabledata" version="0.1.4" />
+    </add>
+    <add id="207" objectId="67" parentObjId="18" parentObjType="module" what="location">
+      <location id="67" x="-115.143714909" y="-190.743123688" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:16:14" id="75" prevId="74" session="0" user="dakoop">
+    <add id="208" objectId="20" parentObjId="" parentObjType="" what="connection">
+      <connection id="20" />
+    </add>
+    <add id="209" objectId="40" parentObjId="20" parentObjType="connection" what="port">
+      <port id="40" moduleId="18" moduleName="SelectFromTable" name="value" signature="(org.vistrails.vistrails.tabledata:Table)" type="source" />
+    </add>
+    <add id="210" objectId="41" parentObjId="20" parentObjType="connection" what="port">
+      <port id="41" moduleId="14" moduleName="GMapCell" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:16:14" id="76" prevId="75" session="0" user="dakoop">
+    <add id="211" objectId="21" parentObjId="" parentObjType="" what="connection">
+      <connection id="21" />
+    </add>
+    <add id="212" objectId="42" parentObjId="21" parentObjType="connection" what="port">
+      <port id="42" moduleId="15" moduleName="ProjectTable" name="value" signature="(org.vistrails.vistrails.tabledata:Table)" type="source" />
+    </add>
+    <add id="213" objectId="43" parentObjId="21" parentObjType="connection" what="port">
+      <port id="43" moduleId="18" moduleName="SelectFromTable" name="table" signature="(org.vistrails.vistrails.tabledata:Table)" type="destination" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:16:18" id="77" prevId="76" session="0" user="dakoop">
+    <add id="214" objectId="17" parentObjId="18" parentObjType="module" what="function">
+      <function id="17" name="str_expr" pos="0" />
+    </add>
+    <add id="215" objectId="21" parentObjId="17" parentObjType="function" what="parameter">
+      <parameter alias="" id="21" name="&lt;no description&gt;" pos="2" type="org.vistrails.vistrails.basic:String" val="" />
+    </add>
+    <add id="216" objectId="20" parentObjId="17" parentObjType="function" what="parameter">
+      <parameter alias="" id="20" name="&lt;no description&gt;" pos="1" type="org.vistrails.vistrails.basic:String" val="" />
+    </add>
+    <add id="217" objectId="19" parentObjId="17" parentObjType="function" what="parameter">
+      <parameter alias="" id="19" name="&lt;no description&gt;" pos="0" type="org.vistrails.vistrails.basic:String" val="line" />
+    </add>
+  </action>
+  <action date="2014-02-04 23:16:20" id="78" prevId="77" session="0" user="dakoop">
+    <change id="218" newObjId="22" oldObjId="20" parentObjId="17" parentObjType="function" what="parameter">
+      <parameter alias="" id="22" name="&lt;no description&gt;" pos="1" type="org.vistrails.vistrails.basic:String" val="==" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:16:23" id="79" prevId="78" session="0" user="dakoop">
+    <change id="219" newObjId="23" oldObjId="21" parentObjId="17" parentObjType="function" what="parameter">
+      <parameter alias="" id="23" name="&lt;no description&gt;" pos="2" type="org.vistrails.vistrails.basic:String" val="Broadway" />
+    </change>
+  </action>
+  <action date="2014-02-04 23:16:37" id="80" prevId="79" session="0" user="dakoop">
+    <delete id="220" objectId="34" parentObjId="17" parentObjType="connection" what="port" />
+    <delete id="221" objectId="35" parentObjId="17" parentObjType="connection" what="port" />
+    <delete id="222" objectId="17" parentObjId="" parentObjType="" what="connection" />
+    <delete id="223" objectId="42" parentObjId="21" parentObjType="connection" what="port" />
+    <delete id="224" objectId="43" parentObjId="21" parentObjType="connection" what="port" />
+    <delete id="225" objectId="21" parentObjId="" parentObjType="" what="connection" />
+    <delete id="226" objectId="58" parentObjId="15" parentObjType="module" what="location" />
+    <delete id="227" objectId="13" parentObjId="11" parentObjType="function" what="parameter" />
+    <delete id="228" objectId="11" parentObjId="15" parentObjType="module" what="function" />
+    <delete id="229" objectId="15" parentObjId="" parentObjType="" what="module" />
+  </action>
+  <action date="2014-02-04 23:16:43" id="81" prevId="79" session="0" user="dakoop">
+    <delete id="230" objectId="43" parentObjId="21" parentObjType="connection" what="port" />
+    <delete id="231" objectId="42" parentObjId="21" parentObjType="connection" what="port" />
+    <delete id="232" objectId="21" parentObjId="" parentObjType="" what="connection" />
+  </action>
+  <action date="2014-02-04 23:16:44" id="82" prevId="81" session="0" user="dakoop">
+    <delete id="233" objectId="35" parentObjId="17" parentObjType="connection" what="port" />
+    <delete id="234" objectId="34" parentObjId="17" parentObjType="connection" what="port" />
+    <delete id

@@ -1,53 +1,89 @@
-FROM debian:8
-MAINTAINER Remi Rampin <remirampin@gmail.com>
+FROM ubuntu:18.04
+LABEL maintainer="VisTrails"
 
-# http.debian.net seems to contain bad mirrors, use something else
-RUN \
-  sh -c 'echo "deb http://ftp.us.debian.org/debian jessie main" > /etc/apt/sources.list' && \
-  sh -c 'echo "deb http://ftp.us.debian.org/debian jessie-updates main" >> /etc/apt/sources.list' && \
-  sh -c 'echo "deb http://security.debian.org jessie/updates main" >> /etc/apt/sources.list'
-# Install VisTrails deps from distrib
-RUN \
-  apt-get update && \
-  apt-get install -y python python-dateutil python-dev python-docutils \
-    python-mako python-matplotlib python-mysqldb python-numpy python-paramiko \
-    python-pip python-scipy python-setuptools python-sphinx python-sqlalchemy \
-    python-suds python-tz python-unittest2 python-virtualenv \
-    python-xlrd python-xlwt
-RUN \
-  apt-get install -y python-qt4 python-qt4-gl python-qt4-sql python-vtk \
-    imagemagick graphviz xvfb
-# Install IPython deps. python-tornado is too old, so we'll get it from pip
-RUN \
-  apt-get install -y python-zmq
+ENV DEBIAN_FRONTEND=noninteractive
+# Install VisTrails system dependencies
+RUN apt-get update && apt-get install -y \
+    python2.7 \
+    python-pip \
+    python-dev \
+    python-qt4 \
+    python-qt4-gl \
+    python-qt4-sql \
+    python-vtk6 \
+    python-numpy \
+    python-scipy \
+    python-matplotlib \
+    python-sklearn \
+    python-dateutil \
+    python-docutils \
+    python-mysqldb \
+    python-paramiko \
+    python-sqlalchemy \
+    python-xlrd \
+    python-xlwt \
+    python-zmq \
+    git \
+    wget \
+    xvfb \
+    x11vnc \
+    xterm \
+    imagemagick \
+    graphviz \
+    libosmesa6 \
+    libglapi-mesa \
+    libgl1-mesa-glx \
+    libgl1-mesa-dri \
+    && rm -rf /var/lib/apt/lists/*
 
-# Makes virtualenv
-RUN \
-  cd /root && \
-  virtualenv --system-site-packages venv
+# Upgrade pip for Python 2.7
+RUN python2.7 -m pip install --upgrade 'pip<21.0' 'setuptools<45'
 
-# These are the only files we need, but `docker build` will still upload
-# everything; .dockerignore format is very broken
-ADD vistrails /root/vistrails
-ADD requirements.txt MANIFEST.in setup.py /root/
+# Set working directory
+WORKDIR /vistrails
 
-# Install missing requirements from pip
-RUN \
-  cd /root && \
-  . venv/bin/activate && \
-  pip install -r requirements.txt jupyter
+# Copy VisTrails source code
+COPY . /vistrails/
 
-# Warning: using 'setup.py develop' will make setuptools add dist-packages to
-# sys.path, which will break everything; don't do it
+# Install Python dependencies from requirements.txt
+RUN pip install \
+    backports.ssl_match_hostname \
+    certifi \
+    dulwich \
+    'file_archive>=0.6' \
+    'IPython<6' \
+    pyth \
+    scp \
+    suds-jurko \
+    'tej>=0.3' \
+    'usagestats>=0.3' \
+    'requests<2.28' \
+    'urllib3<2' \
+    'idna<3' \
+    'chardet<5' \
+    || true
 
-ADD examples /root/examples
+# Create startup scripts
+RUN echo '#!/bin/bash\n\
+if [ -z "$DISPLAY" ]; then\n\
+    export DISPLAY=:99\n\
+    Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &\n\
+    sleep 2\n\
+fi\n\
+exec python2.7 /vistrails/vistrails/run.py "$@"\n\
+' > /usr/local/bin/vistrails && chmod +x /usr/local/bin/vistrails
 
-EXPOSE 8888
+RUN echo '#!/bin/bash\n\
+export DISPLAY=:99\n\
+Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &\n\
+sleep 2\n\
+x11vnc -display :99 -nopw -listen 0.0.0.0 -forever &\n\
+cd /vistrails\n\
+exec jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root\n\
+' > /usr/local/bin/vistrails-jupyter && chmod +x /usr/local/bin/vistrails-jupyter
 
-# VTK needs GL rendering
-RUN apt-get install -y libosmesa6 libglapi-mesa libgl1-mesa-swx11 libgl1-mesa-dri
+# Expose Jupyter and VNC ports
+EXPOSE 8888 5900
 
-ENTRYPOINT \
-  cd /root && \
-  . venv/bin/activate && \
-  xvfb-run -s "-screen 0 640x480x24" jupyter notebook --ip=0.0.0.0 --port=8888
+# Default command
+CMD ["vistrails", "--help"]

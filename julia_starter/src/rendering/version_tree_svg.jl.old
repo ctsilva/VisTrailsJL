@@ -1,0 +1,254 @@
+"""
+SVG Renderer for VisTrails Version Trees
+
+Renders version history as a tree visualization.
+Uses Walker's tree layout algorithm.
+"""
+
+include("tree_layout.jl")
+
+"""
+    render_version_tree_svg(vistrail::Vistrail; kwargs...)
+
+Render version history tree to SVG.
+
+# Arguments
+- `vistrail::Vistrail`: The vistrail to render
+- `width::Int=1200`: SVG canvas width
+- `height::Int=800`: SVG canvas height
+- `node_width::Float64=100.0`: Default node width
+- `node_height::Float64=50.0`: Default node height
+- `sibling_separation::Float64=30.0`: Horizontal spacing between siblings
+- `level_separation::Float64=80.0`: Vertical spacing between levels
+- `margin::Float64=50.0`: Canvas margin
+
+# Returns
+- `String`: SVG XML content
+"""
+function render_version_tree_svg(vistrail::Vistrail;
+                                 width::Int=1200,
+                                 height::Int=800,
+                                 node_width::Float64=100.0,
+                                 node_height::Float64=50.0,
+                                 sibling_separation::Float64=30.0,
+                                 level_separation::Float64=80.0,
+                                 margin::Float64=50.0)
+
+    if isempty(vistrail.actions)
+        return render_empty_tree_svg(width, height)
+    end
+
+    # Build tree structure
+    tree_nodes = Dict{Int, TreeNode}()
+
+    # Create nodes for all versions
+    for (id, action) in vistrail.actions
+        # Check if this version has a tag
+        label = ""
+        for tag in vistrail.tags
+            if tag.version_id == id
+                label = tag.name
+                break
+            end
+        end
+
+        # Use version ID as label if no tag
+        if label == ""
+            label = "$id"
+        end
+
+        tree_nodes[id] = TreeNode(id, label, node_width, node_height)
+    end
+
+    # Build parent-child relationships
+    children = Dict{Int, Vector{Int}}()
+    for (id, action) in vistrail.actions
+        if action.prev_id > 0
+            if !haskey(children, action.prev_id)
+                children[action.prev_id] = Int[]
+            end
+            push!(children[action.prev_id], id)
+        end
+    end
+
+    # Find root (version with no parent)
+    roots = [id for (id, action) in vistrail.actions if action.prev_id == 0]
+
+    if isempty(roots)
+        return render_empty_tree_svg(width, height, "No root version found")
+    end
+
+    root_id = roots[1]  # Use first root
+    root = tree_nodes[root_id]
+
+    # Build tree recursively
+    function build_tree_structure!(node_id)
+        if !haskey(children, node_id)
+            return
+        end
+
+        for child_id in sort(children[node_id])
+            child_node = tree_nodes[child_id]
+            add_child!(root, child_node)
+            build_tree_structure!(child_id)
+        end
+    end
+
+    build_tree_structure!(root_id)
+
+    # Layout the tree
+    layout_tree!(root,
+                orientation=:vertical,
+                sibling_separation=sibling_separation,
+                level_separation=level_separation)
+
+    # Get bounding box
+    (min_x, min_y, bbox_width, bbox_height) = bounding_box(root)
+
+    # Calculate scale to fit in canvas
+    available_width = width - 2*margin
+    available_height = height - 2*margin
+
+    scale_x = available_width / bbox_width
+    scale_y = available_height / bbox_height
+    scale = min(scale_x, scale_y, 1.0)  # Don't scale up
+
+    # Transform function: tree coords -> SVG coords
+    function to_svg(x, y)
+        svg_x = margin + (x - min_x) * scale
+        svg_y = margin + (y - min_y) * scale
+        return (svg_x, svg_y)
+    end
+
+    # Render to SVG
+    io = IOBuffer()
+
+    # SVG header
+    println(io, """<?xml version="1.0" encoding="UTF-8"?>""")
+    println(io, """<svg width="$width" height="$height" xmlns="http://www.w3.org/2000/svg">""")
+
+    # Add CSS styles
+    println(io, """  <defs>""")
+    println(io, """    <style>""")
+    println(io, """      .version-node {""")
+    println(io, """        fill: #f0e68c;""")
+    println(io, """        stroke: #333;""")
+    println(io, """        stroke-width: 2;""")
+    println(io, """      }""")
+    println(io, """      .version-node-tagged {""")
+    println(io, """        fill: #daa520;""")
+    println(io, """        stroke: #333;""")
+    println(io, """        stroke-width: 2;""")
+    println(io, """      }""")
+    println(io, """      .version-node-current {""")
+    println(io, """        fill: #ff8c00;""")
+    println(io, """        stroke: #333;""")
+    println(io, """        stroke-width: 3;""")
+    println(io, """      }""")
+    println(io, """      .version-text {""")
+    println(io, """        font-family: Arial, sans-serif;""")
+    println(io, """        font-size: 12px;""")
+    println(io, """        fill: #333;""")
+    println(io, """        text-anchor: middle;""")
+    println(io, """        dominant-baseline: middle;""")
+    println(io, """      }""")
+    println(io, """      .version-edge {""")
+    println(io, """        stroke: #333;""")
+    println(io, """        stroke-width: 2;""")
+    println(io, """        fill: none;""")
+    println(io, """      }""")
+    println(io, """    </style>""")
+    println(io, """  </defs>""")
+    println(io)
+
+    # Render edges first (below nodes)
+    println(io, """  <!-- Edges -->""")
+
+    function render_edges!(node)
+        if isempty(node.children)
+            return
+        end
+
+        parent_x, parent_y = to_svg(node.x, node.y + node.height)
+
+        for child in node.children
+            child_x, child_y = to_svg(child.x, child.y)
+
+            # Draw line from parent to child
+            println(io, """  <line class="version-edge" x1="$parent_x" y1="$parent_y" x2="$child_x" y2="$child_y"/>""")
+
+            # Recursively render child edges
+            render_edges!(child)
+        end
+    end
+
+    render_edges!(root)
+    println(io)
+
+    # Render nodes
+    println(io, """  <!-- Nodes -->""")
+
+    function render_nodes!(node)
+        x, y = to_svg(node.x, node.y)
+        w = node.width * scale
+        h = node.height * scale
+
+        # Determine node class (current, tagged, or regular)
+        node_class = if node.id == vistrail.current_version
+            "version-node-current"
+        elseif !isempty([t for t in vistrail.tags if t.version_id == node.id])
+            "version-node-tagged"
+        else
+            "version-node"
+        end
+
+        # Draw ellipse (VisTrails style)
+        rx = w / 2
+        ry = h / 2
+        cx = x
+        cy = y + ry
+
+        println(io, """  <g class="version-group" id="version-$(node.id)">""")
+        println(io, """    <ellipse class="$node_class" cx="$cx" cy="$cy" rx="$rx" ry="$ry"/>""")
+        println(io, """    <text class="version-text" x="$cx" y="$cy">$(node.label)</text>""")
+        println(io, """  </g>""")
+
+        # Recursively render children
+        for child in node.children
+            render_nodes!(child)
+        end
+    end
+
+    render_nodes!(root)
+    println(io)
+
+    # SVG footer
+    println(io, """</svg>""")
+
+    return String(take!(io))
+end
+
+"""
+Render empty tree SVG (when no versions exist).
+"""
+function render_empty_tree_svg(width::Int, height::Int, message::String="No versions found")
+    io = IOBuffer()
+    println(io, """<?xml version="1.0" encoding="UTF-8"?>""")
+    println(io, """<svg width="$width" height="$height" xmlns="http://www.w3.org/2000/svg">""")
+    println(io, """  <text x="$(width/2)" y="$(height/2)" text-anchor="middle" fill="#999">""")
+    println(io, """    $message""")
+    println(io, """  </text>""")
+    println(io, """</svg>""")
+    return String(take!(io))
+end
+
+"""
+    save_version_tree_svg(vistrail::Vistrail, filename::String; kwargs...)
+
+Render version tree to SVG and save to file.
+"""
+function save_version_tree_svg(vistrail::Vistrail, filename::String; kwargs...)
+    svg = render_version_tree_svg(vistrail; kwargs...)
+    write(filename, svg)
+    println("✓ Saved version tree SVG to: $filename")
+end

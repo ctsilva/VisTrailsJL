@@ -1,0 +1,285 @@
+"""
+Tree Layout Algorithm
+
+Implementation of Walker's algorithm for tree layout.
+Based on vistrails/core/layout/tree_layout.py
+
+Reference:
+"A Node-positioning Algorithm for General Trees"
+by John Q. Walker II (1989)
+"""
+
+"""
+TreeNode
+
+A node in the tree with layout information.
+"""
+mutable struct TreeNode
+    id::Int
+    label::String
+    width::Float64
+    height::Float64
+    x::Float64
+    y::Float64
+    parent::Union{TreeNode, Nothing}
+    children::Vector{TreeNode}
+
+    # Layout state
+    mod::Float64  # Modifier for positioning
+    thread::Union{TreeNode, Nothing}
+    ancestor::Union{TreeNode, Nothing}
+    prelim::Float64  # Preliminary x coordinate
+    change::Float64
+    shift::Float64
+    number::Int  # Position among siblings
+
+    function TreeNode(id::Int, label::String="", width::Float64=80.0, height::Float64=40.0)
+        new(id, label, width, height, 0.0, 0.0, nothing, TreeNode[],
+            0.0, nothing, nothing, 0.0, 0.0, 0.0, 0)
+    end
+end
+
+"""
+Add a child to a tree node.
+"""
+function add_child!(parent::TreeNode, child::TreeNode)
+    push!(parent.children, child)
+    child.parent = parent
+    child.number = length(parent.children)
+end
+
+"""
+    layout_tree!(root::TreeNode;
+                 orientation::Symbol=:vertical,
+                 sibling_separation::Float64=20.0,
+                 level_separation::Float64=60.0)
+
+Compute layout for a tree using Walker's algorithm.
+
+# Arguments
+- `root::TreeNode`: Root of the tree
+- `orientation::Symbol`: :vertical (top to bottom) or :horizontal (left to right)
+- `sibling_separation::Float64`: Minimum horizontal distance between siblings
+- `level_separation::Float64`: Vertical distance between levels
+
+# Algorithm Steps
+1. Post-order traversal to compute preliminary x coordinates
+2. Separate subtrees to avoid overlap
+3. Second walk to compute final positions
+"""
+function layout_tree!(root::TreeNode;
+                     orientation::Symbol=:vertical,
+                     sibling_separation::Float64=20.0,
+                     level_separation::Float64=60.0)
+
+    # Initialize
+    init_tree!(root)
+
+    # First walk: compute preliminary positions
+    first_walk!(root, sibling_separation)
+
+    # Second walk: compute final positions
+    second_walk!(root, 0.0, 0.0, level_separation, orientation)
+
+    return root
+end
+
+"""
+Initialize tree nodes before layout.
+"""
+function init_tree!(node::TreeNode)
+    node.ancestor = node
+    node.mod = 0.0
+    node.prelim = 0.0
+    node.change = 0.0
+    node.shift = 0.0
+    node.thread = nothing
+
+    for child in node.children
+        init_tree!(child)
+    end
+end
+
+"""
+First walk of Walker's algorithm (post-order traversal).
+"""
+function first_walk!(node::TreeNode, sibling_sep::Float64)
+    if isempty(node.children)
+        # Leaf node
+        if node.number > 1
+            # Has left sibling
+            left_sibling = node.parent.children[node.number - 1]
+            node.prelim = left_sibling.prelim + left_sibling.width/2 + node.width/2 + sibling_sep
+        else
+            node.prelim = 0.0
+        end
+    else
+        # Interior node
+        for child in node.children
+            first_walk!(child, sibling_sep)
+        end
+
+        # Center over children
+        leftmost = node.children[1]
+        rightmost = node.children[end]
+        midpoint = (leftmost.prelim + rightmost.prelim) / 2.0
+
+        if node.number > 1
+            # Has left sibling
+            left_sibling = node.parent.children[node.number - 1]
+            node.prelim = left_sibling.prelim + left_sibling.width/2 + node.width/2 + sibling_sep
+            node.mod = node.prelim - midpoint
+            apportion!(node, sibling_sep)
+        else
+            node.prelim = midpoint
+        end
+    end
+end
+
+"""
+Apportion: Ensure subtrees don't overlap.
+"""
+function apportion!(node::TreeNode, sibling_sep::Float64)
+    if node.number < 2
+        return
+    end
+
+    left_sibling = node.parent.children[node.number - 1]
+
+    # Walk down the inside and outside contours
+    v_inner = node
+    v_outer = node
+    v_inner_left = left_sibling
+    v_outer_left = node.parent.children[1]
+
+    s_inner = v_inner.mod
+    s_outer = v_outer.mod
+    s_inner_left = v_inner_left.mod
+    s_outer_left = v_outer_left.mod
+
+    while next_right(v_inner_left) !== nothing && next_left(v_inner) !== nothing
+        v_inner_left = next_right(v_inner_left)
+        v_inner = next_left(v_inner)
+        v_outer_left = next_left(v_outer_left)
+        v_outer = next_right(v_outer)
+
+        v_outer.ancestor = node
+
+        shift = (v_inner_left.prelim + s_inner_left) - (v_inner.prelim + s_inner) +
+                v_inner_left.width/2 + v_inner.width/2 + sibling_sep
+
+        if shift > 0
+            move_subtree!(ancestor!(v_inner_left, node), node, shift)
+            s_inner += shift
+            s_outer += shift
+        end
+
+        s_inner += v_inner.mod
+        s_outer += v_outer.mod
+        s_inner_left += v_inner_left.mod
+        s_outer_left += v_outer_left.mod
+    end
+
+    if next_right(v_inner_left) !== nothing && next_right(v_outer) === nothing
+        v_outer.thread = next_right(v_inner_left)
+        v_outer.mod += s_inner_left - s_outer
+    end
+
+    if next_left(v_inner) !== nothing && next_left(v_outer_left) === nothing
+        v_outer_left.thread = next_left(v_inner)
+        v_outer_left.mod += s_inner - s_outer_left
+        v_outer_left.ancestor = node
+    end
+end
+
+"""
+Get next node on left contour.
+"""
+function next_left(node::TreeNode)
+    if !isempty(node.children)
+        return node.children[1]
+    else
+        return node.thread
+    end
+end
+
+"""
+Get next node on right contour.
+"""
+function next_right(node::TreeNode)
+    if !isempty(node.children)
+        return node.children[end]
+    else
+        return node.thread
+    end
+end
+
+"""
+Move a subtree.
+"""
+function move_subtree!(wl::TreeNode, wr::TreeNode, shift::Float64)
+    subtrees = wr.number - wl.number
+    wr.change -= shift / subtrees
+    wr.shift += shift
+    wl.change += shift / subtrees
+    wr.prelim += shift
+    wr.mod += shift
+end
+
+"""
+Get the ancestor of a node in the current subtree.
+"""
+function ancestor!(vil::TreeNode, node::TreeNode)
+    if vil.ancestor.parent === node.parent
+        return vil.ancestor
+    else
+        return node
+    end
+end
+
+"""
+Second walk: compute final positions from preliminary positions.
+"""
+function second_walk!(node::TreeNode, m::Float64, depth::Float64,
+                     level_sep::Float64, orientation::Symbol)
+    # Compute final position
+    x_pos = node.prelim + m
+    y_pos = depth
+
+    if orientation == :vertical
+        node.x = x_pos
+        node.y = y_pos
+    else  # horizontal
+        node.x = y_pos
+        node.y = x_pos
+    end
+
+    # Process children
+    for child in node.children
+        second_walk!(child, m + node.mod, depth + node.height + level_sep,
+                    level_sep, orientation)
+    end
+end
+
+"""
+Get bounding box of the tree.
+"""
+function bounding_box(root::TreeNode)
+    min_x = min_y = Inf
+    max_x = max_y = -Inf
+
+    function visit(node)
+        min_x = min(min_x, node.x - node.width/2)
+        max_x = max(max_x, node.x + node.width/2)
+        min_y = min(min_y, node.y)
+        max_y = max(max_y, node.y + node.height)
+
+        for child in node.children
+            visit(child)
+        end
+    end
+
+    visit(root)
+
+    return (min_x, min_y, max_x - min_x, max_y - min_y)
+end

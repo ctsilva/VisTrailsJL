@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  vistrails:
+    build: .
+    image: vistrails:latest
+    container_name: vistrails
+    volumes:
+      # Mount current directory for live editing
+      - .:/vistrails
+      # Persist workflows and data
+      - vistrails-data:/root/.vistrails
+    ports:
+      # Jupyter notebook
+      - "8888:8888"
+      # VNC for GUI access
+      - "5900:5900"
+    environment:
+      - DISPLAY=:99
+    # Keep container running
+    stdin_open: true
+    tty: true
+    command: bash
+
+  # Service for running GUI with VNC
+  vistrails-gui:
+    build: .
+    image: vistrails:latest
+    container_name: vistrails-gui
+    volumes:
+      - .:/vistrails
+      - vistrails-data:/root/.vistrails
+    ports:
+      - "5900:5900"
+    environment:
+      - DISPLAY=:99
+    command: >
+      bash -c "
+      Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+      sleep 2 &&
+      x11vnc -display :99 -nopw -listen 0.0.0.0 -forever -create &
+      sleep 2 &&
+      python2.7 /vistrails/vistrails/run.py
+      "
+
+  # Service for Jupyter notebooks
+  vistrails-jupyter:
+    build: .
+    image: vistrails:latest
+    container_name: vistrails-jupyter
+    volumes:
+      - .:/vistrails
+      - vistrails-data:/root/.vistrails
+    ports:
+      - "8888:8888"
+    command: vistrails-jupyter
+
+volumes:
+  vistrails-data:
