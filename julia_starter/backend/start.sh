@@ -36,5 +36,5 @@ echo ""
 echo "Press Ctrl+C to stop"
 echo ""
 
-# Start server
-julia --project=. server.jl
+# Start server (using HTTP.jl instead of Genie.jl)
+julia --project=. http_server.jl
