@@ -41,6 +41,7 @@ results = execute_pipeline(workflow)
 - [x] Module registry
 - [x] Action replay system
 - [x] SVG rendering (workflows and version trees)
+- [x] Execution logging (provenance tracking)
 - [ ] Full interpreter with caching
 
 #### Packages
@@ -79,11 +80,17 @@ julia_starter/
 │   │   │   └── default.jl           ✅ Complete
 │   │   ├── modules/
 │   │   │   └── module_registry.jl   ✅ Complete
+│   │   ├── log/
+│   │   │   ├── machine.jl           ✅ Complete
+│   │   │   ├── module_exec.jl       ✅ Complete
+│   │   │   ├── workflow_exec.jl     ✅ Complete
+│   │   │   └── log.jl               ✅ Complete
 │   │   └── db/
 │   │       └── io.jl                ✅ Complete
 │   ├── db/
 │   │   └── services/
 │   │       ├── io.jl                ✅ Complete (XML + ZIP)
+│   │       ├── json_io.jl           ✅ Complete (JSON export/import)
 │   │       ├── action_replay.jl     ✅ Complete
 │   │       └── locator.jl           ✅ Complete
 │   ├── rendering/
@@ -229,6 +236,90 @@ write("workflow.svg", workflow_svg)
 results = execute_pipeline(workflow)
 ```
 
+### JSON Export/Import ⭐ NEW!
+
+Convert .vt files to human-readable JSON for easier editing, version control, and web integration.
+
+**Command-line tool:**
+```bash
+# Export .vt to JSON
+julia --project=. vt_json_convert.jl export ../examples/gcd.vt
+
+# Import JSON back to .vt
+julia --project=. vt_json_convert.jl import gcd.json -o gcd_restored.vt
+
+# Validate JSON
+julia --project=. vt_json_convert.jl validate gcd.json
+
+# Export full bundle (with logs, thumbnails)
+julia --project=. vt_json_convert.jl export ../examples/lung.vt --bundle --thumbnails
+```
+
+**Programmatic usage:**
+```julia
+include("src/db/services/json_io.jl")
+
+# Export to JSON
+export_vt_to_json("../examples/gcd.vt", json_filename="gcd.json", pretty=true)
+
+# Import from JSON
+import_vt_from_json("gcd.json", vt_filename="gcd_restored.vt")
+
+# Validate
+is_valid, error = validate_json_vistrail("gcd.json")
+```
+
+**Use cases:**
+- 📝 Human-readable workflow inspection
+- 🔍 Git-friendly diffs (line-by-line changes)
+- 🌐 Web integration (standard JSON format)
+- 🔧 Easier editing and debugging
+- 🤖 API interoperability
+
+See [docs/JSON_CONVERSION.md](docs/JSON_CONVERSION.md) for details.
+
+**Note:** Restored .vt files are larger than originals due to ZipFile.jl limitation (no compression support). Content is identical.
+
+### Execution Logging ⭐ NEW!
+
+Track workflow execution with comprehensive provenance records, similar to Python VisTrails.
+
+**Features:**
+- 📊 Module execution timing and caching
+- 🖥️ Machine information (OS, architecture, RAM)
+- ❌ Error tracking with stack traces
+- ⏱️ Workflow duration metrics
+- 📈 Success/failure statistics
+
+**Usage:**
+```julia
+include("src/core/interpreter/default.jl")
+
+# Execute with logging (enabled by default)
+cache, workflow_exec = execute_pipeline(pipeline)
+
+# View execution summary
+if workflow_exec !== nothing
+    println("Duration: ", duration(workflow_exec))
+    println("Failed modules: ", length(failed_modules(workflow_exec)))
+    println("Cached modules: ", length(cached_modules(workflow_exec)))
+
+    # Detailed module execution info
+    for mod_exec in workflow_exec.module_execs
+        status = mod_exec.completed == 1 ? "✓" : "✗"
+        cached = mod_exec.cached ? " [CACHED]" : ""
+        println("$status $(mod_exec.module_name)$cached: $(duration(mod_exec))")
+    end
+end
+
+# Use Log container for multiple executions
+log = Log(vistrail_id="my_vistrail")
+add_workflow_exec!(log, workflow_exec)
+print_summary(log)  # Formatted summary with statistics
+```
+
+See [docs/LOGGING.md](docs/LOGGING.md) for complete documentation.
+
 #### SVG Rendering Features
 
 The Julia implementation includes full SVG rendering capabilities:
@@ -268,6 +359,7 @@ write("mta_workflow.svg", workflow_svg)
 |---------|--------|-------|-------|
 | Read .vt (XML) | ✅ | ✅ | Plain XML files |
 | Read .vt (ZIP) | ✅ | ✅ | Compressed archives |
+| JSON export/import | ❌ | ✅ | Human-readable .vt format |
 | Action replay | ✅ | ✅ | Full reconstruction from history |
 | Lightweight rendering | ❌ | ✅ | Render without module descriptors |
 | SVG rendering | ❌ | ✅ | Version trees and workflows |
@@ -297,8 +389,9 @@ write("mta_workflow.svg", workflow_svg)
 - [x] PythonCalc via PyCall
 - [x] Read Python .vt files (XML and ZIP)
 - [x] Execute mixed Julia/Python workflows
-- [ ] Write .vt files
+- [x] JSON export/import for .vt files
 - [x] Render workflows without all packages installed
+- [ ] Write .vt files (XML generation)
 
 #### Phase 3: Extended Packages
 - [ ] DataFrames integration
