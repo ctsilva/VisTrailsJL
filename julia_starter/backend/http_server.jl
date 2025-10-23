@@ -77,6 +77,96 @@ HTTP.register!(router, "GET", "/api/workflows", req -> begin
     end
 end)
 
+# Helper function to convert pipeline to JSON
+function pipeline_to_json(pipeline, vistrail, version_id)
+    # Convert modules
+    modules = map(collect(pipeline.modules)) do (id, mod)
+        # Get position from layout_position if available
+        x, y = if mod.layout_position !== nothing
+            mod.layout_position
+        else
+            # Fallback simple layout
+            (100.0 + (id * 150.0), 100.0)
+        end
+
+        # Get ports from descriptor
+        inputs = map(mod.descriptor.input_ports) do p
+            Dict(
+                "name" => p.name,
+                "type" => string(p.type),
+                "optional" => p.optional
+            )
+        end
+
+        outputs = map(mod.descriptor.output_ports) do p
+            Dict(
+                "name" => p.name,
+                "type" => string(p.type)
+            )
+        end
+
+        Dict(
+            "id" => id,
+            "name" => mod.descriptor.name,
+            "package" => mod.descriptor.package,
+            "x" => x,
+            "y" => y,
+            "inputs" => inputs,
+            "outputs" => outputs,
+            "parameters" => mod.parameters,
+            "annotations" => mod.annotations
+        )
+    end
+
+    # Convert connections
+    connections = map(pipeline.connections) do conn
+        Dict(
+            "id" => conn.id,
+            "source_id" => conn.source_module_id,
+            "source_port" => conn.source_port,
+            "target_id" => conn.dest_module_id,
+            "target_port" => conn.dest_port
+        )
+    end
+
+    Dict(
+        "modules" => modules,
+        "connections" => connections,
+        "version_id" => version_id
+    )
+end
+
+# Get workflow as JSON (current version pipeline)
+HTTP.register!(router, "GET", "/api/workflow/*/json", req -> begin
+    try
+        # Extract workflow ID from path
+        path_parts = split(HTTP.URIs.unescapeuri(req.target), "/")
+        workflow_id = path_parts[4]  # /api/workflow/:id/json
+
+        vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+
+        if !isfile(vt_file)
+            return json_response(Dict("error" => "Workflow not found", "id" => workflow_id), status=404)
+        end
+
+        vistrail = VisTrailsJL.load_vistrail(vt_file)
+
+        # Get current version pipeline
+        current_version = vistrail.current_version
+        if !haskey(vistrail.pipelines, current_version)
+            return json_response(Dict("error" => "Current version $current_version could not be reconstructed"), status=404)
+        end
+
+        pipeline = vistrail.pipelines[current_version]
+        workflow_json = pipeline_to_json(pipeline, vistrail, current_version)
+
+        json_response(workflow_json)
+    catch e
+        @error "Error loading workflow as JSON" exception=(e, catch_backtrace())
+        json_response(Dict("error" => "Internal server error", "message" => string(e)), status=500)
+    end
+end)
+
 # Get workflow metadata
 HTTP.register!(router, "GET", "/api/workflow/*", req -> begin
     try
@@ -128,6 +218,34 @@ HTTP.register!(router, "GET", "/api/workflow/*/tree/svg", req -> begin
         svg_response(svg_content)
     catch e
         @error "Error generating version tree SVG" exception=(e, catch_backtrace())
+        json_response(Dict("error" => "Internal server error", "message" => string(e)), status=500)
+    end
+end)
+
+# Get workflow version as JSON
+HTTP.register!(router, "GET", "/api/workflow/*/version/*/json", req -> begin
+    try
+        path_parts = split(HTTP.URIs.unescapeuri(req.target), "/")
+        workflow_id = path_parts[4]  # /api/workflow/:id/version/:version_id/json
+        version_id = parse(Int, path_parts[6])
+
+        vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+
+        if !isfile(vt_file)
+            return json_response(Dict("error" => "Workflow not found"), status=404)
+        end
+
+        vistrail = VisTrailsJL.load_vistrail(vt_file, version=version_id)
+
+        if haskey(vistrail.pipelines, version_id)
+            pipeline = vistrail.pipelines[version_id]
+            workflow_json = pipeline_to_json(pipeline, vistrail, version_id)
+            json_response(workflow_json)
+        else
+            json_response(Dict("error" => "Version $version_id could not be reconstructed"), status=404)
+        end
+    catch e
+        @error "Error generating workflow JSON" exception=(e, catch_backtrace())
         json_response(Dict("error" => "Internal server error", "message" => string(e)), status=500)
     end
 end)

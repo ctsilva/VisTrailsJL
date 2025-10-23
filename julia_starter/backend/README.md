@@ -1,18 +1,14 @@
 # VisTrailsJL Backend API
 
-Genie.jl-based REST API for serving VisTrails workflows as JSON and SVG.
+HTTP.jl-based REST API for serving VisTrails workflows as JSON and SVG.
 
 ## Quick Start
 
 ```bash
 cd backend
 
-# Method 1: Use start script (recommended)
-./start.sh
-
-# Method 2: Manual start
-julia --project=. -e 'using Pkg; Pkg.instantiate()'
-julia --project=. server.jl
+# Start the server
+julia --project=. -e 'include("http_server.jl")'
 ```
 
 Server will start at http://localhost:8000
@@ -60,15 +56,41 @@ Response:
 }
 ```
 
-### Get Workflow as JSON (Latest Version)
+### Get Workflow Metadata
 
 ```bash
 GET /api/workflow/:id
 ```
 
+Returns workflow metadata (name, version count, etc.) without the full pipeline structure.
+
 Example:
 ```bash
 curl http://localhost:8000/api/workflow/gcd
+```
+
+Response:
+```json
+{
+  "id": "gcd",
+  "name": "gcd",
+  "current_version": 134,
+  "version_count": 134,
+  "versions": [{"id": 1}, {"id": 2}, ...]
+}
+```
+
+### Get Workflow Pipeline as JSON ⭐ NEW
+
+```bash
+GET /api/workflow/:id/json
+```
+
+Returns the complete pipeline structure (modules and connections) for the current version as JSON.
+
+Example:
+```bash
+curl http://localhost:8000/api/workflow/gcd/json
 ```
 
 Response:
@@ -82,18 +104,21 @@ Response:
       "x": 100.0,
       "y": 50.0,
       "inputs": [],
-      "outputs": [{"name": "value", "type": "Integer"}]
+      "outputs": [{"name": "value", "type": "Int64"}],
+      "parameters": {},
+      "annotations": {}
     }
   ],
   "connections": [
     {
+      "id": 1,
       "source_id": 1,
       "source_port": "value",
       "target_id": 3,
       "target_port": "a"
     }
   ],
-  "version_id": 100
+  "version_id": 134
 }
 ```
 
@@ -111,16 +136,20 @@ curl http://localhost:8000/api/workflow/gcd/svg > workflow.svg
 
 Returns workflow rendered as SVG. This is the recommended way to display workflows - let the backend handle action replay and rendering!
 
-### Get Specific Version as JSON
+### Get Specific Version as JSON ⭐ NEW
 
 ```bash
-GET /api/workflow/:id/version/:version_id
+GET /api/workflow/:id/version/:version_id/json
 ```
+
+Returns the complete pipeline structure for a specific version.
 
 Example:
 ```bash
-curl http://localhost:8000/api/workflow/gcd/version/50
+curl http://localhost:8000/api/workflow/gcd/version/50/json
 ```
+
+Response: Same structure as `/api/workflow/:id/json` but for the specified version.
 
 ### Get Specific Version as SVG ⭐ NEW
 
@@ -194,22 +223,17 @@ curl http://localhost:8000/health
 # List workflows
 curl http://localhost:8000/api/workflows | jq .
 
-# Get GCD workflow (JSON)
+# Get GCD workflow metadata
 curl http://localhost:8000/api/workflow/gcd | jq .
 
-# Get GCD workflow (SVG)
-curl http://localhost:8000/api/workflow/gcd/svg > gcd_workflow.svg
-open gcd_workflow.svg  # macOS
-# Or visit: http://localhost:8000/api/workflow/gcd/svg
+# Get GCD workflow pipeline as JSON ⭐ NEW
+curl http://localhost:8000/api/workflow/gcd/json | jq .
 
-# Get specific version (JSON)
-curl http://localhost:8000/api/workflow/gcd/version/50 | jq .
+# Get specific version pipeline as JSON ⭐ NEW
+curl http://localhost:8000/api/workflow/gcd/version/50/json | jq .
 
 # Get specific version (SVG)
 curl http://localhost:8000/api/workflow/gcd/version/50/svg > gcd_v50.svg
-
-# Get version tree (metadata)
-curl http://localhost:8000/api/workflow/gcd/versions | jq .
 
 # Get version tree (SVG visualization)
 curl http://localhost:8000/api/workflow/gcd/tree/svg > gcd_tree.svg
@@ -230,16 +254,15 @@ This format can be easily adapted to the VisFlow frontend format.
 
 Environment variables:
 - `PORT`: Server port (default: 8000)
-- `GENIE_ENV`: Environment (dev/prod, default: dev)
 
 ## Development
 
-To add new endpoints, edit `routes.jl`:
+To add new endpoints, edit `http_server.jl`:
 
 ```julia
-route("/api/my-endpoint") do
-    json(Dict("data" => "value"))
-end
+HTTP.register!(router, "GET", "/api/my-endpoint", req -> begin
+    json_response(Dict("data" => "value"))
+end)
 ```
 
 ## CORS
@@ -252,16 +275,20 @@ CORS is enabled for all origins in development mode to allow frontend developmen
 |----------|--------|-------------|--------|
 | `/health` | GET | Health check | JSON |
 | `/api/workflows` | GET | List all .vt files | JSON |
-| `/api/workflow/:id` | GET | Get workflow (current version) | JSON |
-| `/api/workflow/:id/svg` | GET | Get workflow as SVG | SVG |
-| `/api/workflow/:id/version/:vid` | GET | Get specific version | JSON |
+| `/api/workflow/:id` | GET | Get workflow metadata | JSON |
+| `/api/workflow/:id/json` | GET | **Get pipeline as JSON (current version)** ⭐ | JSON |
+| `/api/workflow/:id/version/:vid/json` | GET | **Get pipeline as JSON (specific version)** ⭐ | JSON |
 | `/api/workflow/:id/version/:vid/svg` | GET | Get specific version as SVG | SVG |
-| `/api/workflow/:id/versions` | GET | Get version tree metadata | JSON |
 | `/api/workflow/:id/tree/svg` | GET | Get version tree visualization | SVG |
-| `/demo` | GET | Workflow browser demo | HTML |
-| `/tree-demo` | GET | Version tree viewer demo | HTML |
 
 ## Recent Improvements
+
+### JSON Pipeline Endpoints ⭐ NEW
+- **Pipeline structure as JSON**: Added `/api/workflow/:id/json` and `/api/workflow/:id/version/:vid/json`
+- **Complete module information**: Returns module name, package, position (x, y), ports, parameters, and annotations
+- **Connection details**: Includes connection IDs, source/target module IDs, and port names
+- **Layout information**: Preserves original module positions from .vt files
+- **Port specifications**: Full input/output port details with types and optional flags
 
 ### SVG Rendering Fixes
 - **Workflow module boxes**: Fixed dynamic sizing to accommodate long module names (e.g., "vtkStructuredPointsReader")
