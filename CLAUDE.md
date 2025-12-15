@@ -108,11 +108,11 @@ Core dependencies are in `requirements.txt`. Development dependencies in `dev-re
 
 Tests use Python's unittest framework. Test files are organized by package/module. Image comparison tests validate visualization outputs. The test runner can execute individual test modules or the full suite.
 
-## Julia Implementation (NEW!)
+## Julia Implementation (VisTrailsJL)
 
-A Julia reimplementation is under development in `julia_starter/`. This provides:
+A Julia reimplementation is under development in `julia_starter/`. This provides a modern, notebook-based approach to scientific workflows.
 
-### Completed Features
+### Completed Features (v0.1)
 - ✅ Full .vt file loading (plain XML and ZIP formats)
 - ✅ Action replay system for reconstructing workflows from history
 - ✅ Lightweight rendering mode (renders workflows without requiring all packages)
@@ -120,17 +120,114 @@ A Julia reimplementation is under development in `julia_starter/`. This provides
 - ✅ Module registry and package system
 - ✅ Dynamic module box sizing based on labels
 - ✅ Port positioning and connection routing
+- ✅ Workflow execution with caching
+- ✅ Execution logging (provenance tracking)
+- ✅ JSON export/import for .vt files
+- ✅ HTTP.jl backend API for workflow management
+- ✅ Native Julia execution (JuliaSource module)
+- ✅ Python interop (PythonSource via PyCall.jl)
 
 ### Successfully Tested Files
-- `gcd.vt` - 22 modules, 31 connections (plain XML)
-- `lung.vt` - 13 modules, 12 connections (ZIP, VTK modules)
-- `mta.vt` - 17 modules, 18 connections (138 version history)
-- `plot.vt` - 10 modules, 10 connections (43 version history)
+- `gcd.vt` - 22 modules, 31 connections, 134 versions (plain XML)
+- `lung.vt` - 13 modules, 12 connections, 1843 versions (ZIP, VTK modules)
+- `mta.vt` - 17 modules, 18 connections, 138 versions (ZIP)
+- `plot.vt` - 10 modules, 10 connections, 43 versions (ZIP)
 
 ### Key Innovation: Lightweight Rendering
 The Julia implementation can render workflows even when module packages (VTK, matplotlib, etc.) are not installed. It extracts layout and connection information from the action history without requiring module descriptors.
 
-See `julia_starter/README.md` and `julia_starter/docs/RENDERING.md` for details.
+### Current Focus: Notebook-Based Workflow System (v0.2)
+
+**Vision**: Define workflows and packages using Jupyter notebooks with nbdev-style directives, eliminating the need for a GUI while providing git-native version control.
+
+**Design Documents** (in `julia_starter/docs/`):
+- `PACKAGE_DEFINITIONS_V2.md` - How to define VisTrails packages in notebooks
+- `WORKFLOW_DEFINITIONS.md` - How to define workflows in notebooks
+- `DESIGN_VALIDATION.md` - Validation of notebook-based approach against real use cases
+
+**Key Concepts**:
+
+1. **Package Notebooks** - Define module types with directives:
+   ```julia
+   #| package-meta
+   #| identifier: org.vistrails.vistrails.mypackage
+   #| version: 1.0.0
+
+   #| module: HTTPFile
+   #| output_ports:
+   #|   - name: file
+   #|     signature: basic:String
+   #| parameters:
+   #|   - name: url
+   #|     signature: basic:String
+
+   function compute(self::ModuleInstance)
+       url = get_parameter(self, "url")
+       response = HTTP.get(url)
+       set_output(self, "file", String(response.body))
+   end
+   ```
+
+2. **Workflow Notebooks** - Define module instances and connections:
+   ```julia
+   #| workflow: covid_analysis
+   #| version: 1
+
+   #| module-id: fetch_data
+   #| module-type: basic:HTTPFile
+   #| params:
+   #|   url: "https://api.covid19api.com/summary"
+
+   #| module-id: process
+   #| module-type: julia:JuliaSource
+   #| inputs:
+   #|   data: fetch_data.file
+
+   using JSON
+   data = JSON.parse(get_input("data"))
+   # ... processing logic ...
+   set_output("result", processed_data)
+
+   #| execute
+   ```
+
+3. **Git-Native Version Control**:
+   - Git commits → VisTrails actions
+   - Git diffs → Module operations (add/delete/modify)
+   - Git history → Version tree
+   - Git branches → Version tree branches
+   - Git tags → VisTrails tags
+
+4. **Literate Workflows**:
+   - Mix documentation (markdown), workflow definition (directives), and code
+   - Executable notebooks (run to execute workflow)
+   - Quarto integration for publication-ready reports
+
+5. **Backward Compatible**:
+   - Round-trip conversion: .vt ↔ notebook
+   - Same concepts as Python VisTrails (Module, Port, compute(), etc.)
+   - Port signature system: `basic:Float`, `basic:String`
+   - Compatible with existing .vt files
+
+**Status**: Design validated and approved. Ready for implementation.
+
+**Next Steps**:
+1. Implement directive parser for package notebooks
+2. Implement directive parser for workflow notebooks
+3. Build diff engine (notebook diffs → VisTrails actions)
+4. Implement execution from notebooks
+5. Build conversion tools (.vt ↔ notebook)
+6. Git history importer (commits → version tree)
+
+**Benefits**:
+- ✅ No GUI required for complete workflow system
+- ✅ Git for version control (standard tools, GitHub PRs)
+- ✅ Literate programming (documentation + code)
+- ✅ Jupyter/Quarto/VSCode compatible
+- ✅ Faster development (6-9 weeks vs 8-11 weeks for GUI)
+- ✅ More collaborative (GitHub workflow)
+
+See `julia_starter/docs/V1_ROADMAP.md` for original GUI-based roadmap (deferred in favor of notebook approach).
 
 ## Python 3 Migration Analysis
 
