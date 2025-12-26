@@ -5,7 +5,7 @@ Render any VisTrails .vt file (even without having all packages installed!)
 ## Installation
 
 ```bash
-cd julia_starter
+cd julia
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 

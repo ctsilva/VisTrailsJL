@@ -562,7 +562,7 @@ These features are important but can wait for v1.1+:
 
 1. **Backend Development**
    ```bash
-   cd julia_starter
+   cd julia
    julia --project=.
    include("backend/http_server.jl")
    ```

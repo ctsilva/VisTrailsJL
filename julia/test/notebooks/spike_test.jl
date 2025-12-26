@@ -8,7 +8,7 @@ This script tests the complete flow:
 4. Verify result
 """
 
-# Get the julia_starter root directory
+# Get the julia root directory
 const JULIA_STARTER_ROOT = dirname(dirname(@__DIR__))
 
 # Load VisTrailsJL core first

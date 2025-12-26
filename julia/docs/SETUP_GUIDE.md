@@ -43,7 +43,7 @@ VisTrailsJL Genie Backend
 ## Directory Structure
 
 ```
-/Users/csilva/src/VisTrails/julia_starter/
+/Users/csilva/src/VisTrails/julia/
 ├── backend/
 │   ├── server.jl              # Main Genie server
 │   ├── start.sh               # Startup script
@@ -78,14 +78,14 @@ VisTrailsJL Genie Backend
 ### 1. Start VisTrailsJL Backend
 
 ```bash
-cd /Users/csilva/src/VisTrails/julia_starter/backend
+cd /Users/csilva/src/VisTrails/julia/backend
 ./start.sh
 ```
 
 This will:
 1. Install Julia dependencies (first run only)
 2. Start Genie server on port 8000
-3. Load all .vt files from `julia_starter/workflows/`
+3. Load all .vt files from `julia/workflows/`
 4. Initialize module registry
 
 **Verify backend is running:**
@@ -320,7 +320,7 @@ open workflow.svg
 3. Hard refresh browser if needed: `Cmd+Shift+R`
 
 ### Making Changes to Backend
-1. Edit files in `/Users/csilva/src/VisTrails/julia_starter/`
+1. Edit files in `/Users/csilva/src/VisTrails/julia/`
 2. Restart backend: `Ctrl+C` then `./start.sh`
 3. Or use `Revise.jl` for live reloading (advanced)
 
@@ -356,7 +356,7 @@ Successfully rendering:
 - `lung.vt` - 13 modules, 12 connections (VTK)
 - `mta.vt` - 17 modules, 18 connections (138 versions)
 - `plot.vt` - 10 modules, 10 connections (43 versions)
-- Many more in `julia_starter/workflows/`
+- Many more in `julia/workflows/`
 
 ## Git Repositories
 
@@ -375,9 +375,9 @@ Successfully rendering:
 
 ## Related Documentation
 
-- `/Users/csilva/src/VisTrails/julia_starter/README.md` - VisTrailsJL overview
-- `/Users/csilva/src/VisTrails/julia_starter/docs/RENDERING.md` - Rendering details
-- `/Users/csilva/src/VisTrails/julia_starter/docs/VISFLOW_INTEGRATION.md` - Backend API docs
+- `/Users/csilva/src/VisTrails/julia/README.md` - VisTrailsJL overview
+- `/Users/csilva/src/VisTrails/julia/docs/RENDERING.md` - Rendering details
+- `/Users/csilva/src/VisTrails/julia/docs/VISFLOW_INTEGRATION.md` - Backend API docs
 - `/Users/csilva/github/visflow/docs/VISFLOW_VISTRAILS_INTEGRATION.md` - Full integration guide
 - `/Users/csilva/github/visflow/client/src/components/vistrails-viewer/README.md` - Component docs
 
@@ -385,7 +385,7 @@ Successfully rendering:
 
 ```bash
 # Terminal 1 - Backend
-cd /Users/csilva/src/VisTrails/julia_starter/backend
+cd /Users/csilva/src/VisTrails/julia/backend
 ./start.sh
 
 # Terminal 2 - Frontend

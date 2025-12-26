@@ -35,7 +35,7 @@ git remote -v
 # Add all new files
 echo ""
 echo "Step 2: Adding all new Julia files..."
-git add julia_starter/
+git add julia/
 git add CLAUDE.md
 git add DOCKER_QUICK_START.md
 git add DOCKER_SETUP.md

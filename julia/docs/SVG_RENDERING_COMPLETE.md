@@ -112,7 +112,7 @@ Matches original VisTrails GUI:
 ## File Structure
 
 ```
-julia_starter/src/
+julia/src/
 ├── core/vistrail/
 │   └── module.jl          # Added layout_position field
 ├── db/services/
@@ -122,7 +122,7 @@ julia_starter/src/
 │   └── workflow_svg.jl    # SVG renderer (NEW!)
 └── VisTrailsJL.jl         # Export SVG functions
 
-julia_starter/
+julia/
 ├── test_svg_rendering.jl  # Test script
 └── gcd_workflow.svg       # Generated output!
 ```

@@ -25,14 +25,14 @@ doc/usersguide/_build/
 *.jl.*.cov
 *.jl.mem
 /Manifest.toml
-/julia_starter/Manifest.toml
+/julia/Manifest.toml
 
-# Julia packages (but keep our julia_starter/Manifest.toml for reproducibility)
-!julia_starter/Manifest.toml
+# Julia packages (but keep our julia/Manifest.toml for reproducibility)
+!julia/Manifest.toml
 
 # VSCode
 .vscode/
 
 # Generated SVG outputs (keep examples)
-julia_starter/*.svg
-!julia_starter/examples/*.svg
+julia/*.svg
+!julia/examples/*.svg

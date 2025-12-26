@@ -179,4 +179,4 @@ When rendering workflows in SVG:
 ## References
 
 - VisTrails Python source: `/Users/csilva/src/VisTrails/vistrails/`
-- Julia implementations: `/Users/csilva/src/VisTrails/julia_starter/src/packages/`
+- Julia implementations: `/Users/csilva/src/VisTrails/julia/src/packages/`

@@ -5,7 +5,7 @@ Complete API reference for the VisTrailsJL backend server.
 ## Starting the Server
 
 ```bash
-cd julia_starter/backend
+cd julia/backend
 ./start.sh
 ```
 
@@ -436,7 +436,7 @@ Complete testing workflow:
 
 ```bash
 # 1. Start server
-cd julia_starter/backend
+cd julia/backend
 ./start.sh
 
 # 2. Wait for server to start
@@ -493,11 +493,11 @@ lsof -i :8000
 pkill -f "julia.*server.jl"
 
 # Restart
-cd julia_starter/backend && ./start.sh
+cd julia/backend && ./start.sh
 ```
 
 ### SVG not rendering
-- Check that the .vt file exists in `julia_starter/examples/`
+- Check that the .vt file exists in `julia/examples/`
 - Verify version ID exists: `curl http://localhost:8000/api/workflow/ID/versions | jq '.versions[].id'`
 - Check server logs for errors
 

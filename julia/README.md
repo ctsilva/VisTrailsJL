@@ -65,7 +65,7 @@ results = execute_pipeline(workflow)
 The directory structure mirrors Python VisTrails:
 
 ```
-julia_starter/
+julia/
 ├── Project.toml
 ├── src/
 │   ├── VisTrailsJL.jl              # Main module ✅

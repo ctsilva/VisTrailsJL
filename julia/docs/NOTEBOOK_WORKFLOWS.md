@@ -471,7 +471,7 @@ end
 ### Components to Build
 
 ```
-julia_starter/
+julia/
 ├── src/
 │   ├── notebook/
 │   │   ├── parser.jl           # Parse notebook cells → modules

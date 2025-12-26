@@ -99,7 +99,7 @@ Both systems are running and tested:
 │  • SVG generation                                           │
 └─────────────────────────────────────────────────────────────┘
                            ↓
-              julia_starter/workflows/*.vt
+              julia/workflows/*.vt
 ```
 
 ## File Locations and Purposes
@@ -107,7 +107,7 @@ Both systems are running and tested:
 ### Backend Files
 
 ```
-/Users/csilva/src/VisTrails/julia_starter/
+/Users/csilva/src/VisTrails/julia/
 ├── backend/
 │   ├── server.jl          # Genie server entry point
 │   ├── start.sh           # Startup script with Julia command
@@ -230,7 +230,7 @@ module.exports = {
 
 ```bash
 # Terminal 1 - Backend
-cd /Users/csilva/src/VisTrails/julia_starter/backend
+cd /Users/csilva/src/VisTrails/julia/backend
 ./start.sh
 
 # Terminal 2 - Frontend
@@ -311,10 +311,10 @@ open workflow.svg
 
 In VisTrails repository (branch v2.2):
 ```
-julia_starter/docs/VERSION_TREE_DEMO_COMPLETE.md
-julia_starter/docs/VISFLOW_FORK_PLAN.md
-julia_starter/docs/VISFLOW_INTEGRATION_POC.md
-julia_starter/docs/VISFLOW_STATUS_AND_NEXT_STEPS.md
+julia/docs/VERSION_TREE_DEMO_COMPLETE.md
+julia/docs/VISFLOW_FORK_PLAN.md
+julia/docs/VISFLOW_INTEGRATION_POC.md
+julia/docs/VISFLOW_STATUS_AND_NEXT_STEPS.md
 ```
 
 These are documentation files from earlier work that haven't been committed yet.
@@ -388,7 +388,7 @@ If you're another Claude instance:
 ## Questions You Might Have
 
 **Q: Where are the .vt workflow files?**
-A: `/Users/csilva/src/VisTrails/julia_starter/workflows/`
+A: `/Users/csilva/src/VisTrails/julia/workflows/`
 
 **Q: How do I add a new API endpoint?**
 A: Edit `backend/routes.jl`, restart backend with `./start.sh`
@@ -406,7 +406,7 @@ A: Yes, but update proxy config in vue.config.js and restart frontend
 A: No - lightweight rendering mode works without Python packages
 
 **Q: How do I add a new workflow file?**
-A: Drop .vt file in `julia_starter/workflows/`, restart backend
+A: Drop .vt file in `julia/workflows/`, restart backend
 
 **Q: Why does it take so long to start the backend?**
 A: First run installs Julia packages, subsequent runs are faster

@@ -107,7 +107,7 @@ The demo shows how to map VisTrailsJL format to VisFlow's expected format:
 
 ```bash
 # Start the backend
-cd /Users/csilva/src/VisTrails/julia_starter/backend
+cd /Users/csilva/src/VisTrails/julia/backend
 ./start.sh
 
 # Open the demo in your browser

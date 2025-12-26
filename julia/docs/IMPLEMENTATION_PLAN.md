@@ -632,7 +632,7 @@ If you want to ship faster, here's a **6-week MVP**:
 
 1. **Set up development environment**
    ```bash
-   cd julia_starter
+   cd julia
    julia --project=.
    ```
 

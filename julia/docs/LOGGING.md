@@ -260,7 +260,7 @@ Currently logs are in-memory only. Future work:
 Run the logging test:
 
 ```bash
-cd julia_starter
+cd julia
 julia --project=. test_logging_simple.jl
 ```
 

@@ -31,7 +31,7 @@ If you want to do it manually instead of using the script:
 
 ```bash
 # 1. Stage all new files
-git add julia_starter/ CLAUDE.md README.md .gitignore
+git add julia/ CLAUDE.md README.md .gitignore
 git add DOCKER_QUICK_START.md DOCKER_SETUP.md JULIA_ARCHITECTURE.md
 git add docker-compose.yml install-docker.sh run-vistrails-docker.sh
 git add setup_new_repo.sh MIGRATION_GUIDE.md
@@ -92,7 +92,7 @@ cd VisTrailsJL
 git remote add upstream https://github.com/VisTrails/VisTrails.git
 
 # Setup Julia environment
-cd julia_starter
+cd julia
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 # Test it works
@@ -115,7 +115,7 @@ VisTrailsJL/
 │   ├── packages/
 │   └── gui/
 │
-├── julia_starter/              # VisTrailsJL implementation
+├── julia/              # VisTrailsJL implementation
 │   ├── src/                   # Julia source code
 │   ├── docs/                  # Documentation
 │   ├── examples/              # Example workflows

@@ -32,7 +32,7 @@ VisTrailsJL is a complete Julia reimplementation that:
 │   ├── packages/          # Built-in packages (VTK, matplotlib, etc.)
 │   └── gui/               # PyQt GUI
 │
-├── julia_starter/          # VisTrailsJL - Julia implementation
+├── julia/          # VisTrailsJL - Julia implementation
 │   ├── src/
 │   │   ├── core/          # Core system (matching Python structure)
 │   │   ├── packages/      # Julia packages (basic, julia, python)
@@ -53,8 +53,8 @@ VisTrailsJL is a complete Julia reimplementation that:
 ### Installation
 
 ```julia
-# Navigate to julia_starter directory
-cd julia_starter
+# Navigate to julia directory
+cd julia
 
 # Activate the project
 using Pkg
@@ -137,19 +137,19 @@ All core functionality is implemented and tested:
 - Full interpreter with caching (currently direct execution)
 - VTK package for 3D visualization
 - Matplotlib package for plotting
-- Web-based workflow editor (in progress - see [docs/](julia_starter/docs/))
+- Web-based workflow editor (in progress - see [docs/](julia/docs/))
 
 ## Documentation
 
-Comprehensive documentation is available in [`julia_starter/docs/`](julia_starter/docs/):
+Comprehensive documentation is available in [`julia/docs/`](julia/docs/):
 
-- **[README.md](julia_starter/README.md)** - VisTrailsJL overview
-- **[QUICKSTART.md](julia_starter/QUICKSTART.md)** - Getting started guide
-- **[IMPLEMENTATION_STATUS.md](julia_starter/docs/IMPLEMENTATION_STATUS.md)** - Feature comparison with Python
-- **[COMPLETION_SUMMARY.md](julia_starter/docs/COMPLETION_SUMMARY.md)** - Implementation verification
-- **[API_REQUIREMENTS.md](julia_starter/docs/API_REQUIREMENTS.md)** - REST API design for web editor
-- **[VISFLOW_INTEGRATION_ANALYSIS.md](julia_starter/docs/VISFLOW_INTEGRATION_ANALYSIS.md)** - Web editor integration plan
-- **[CURIO_VS_VISFLOW_COMPARISON.md](julia_starter/docs/CURIO_VS_VISFLOW_COMPARISON.md)** - Frontend technology comparison
+- **[README.md](julia/README.md)** - VisTrailsJL overview
+- **[QUICKSTART.md](julia/QUICKSTART.md)** - Getting started guide
+- **[IMPLEMENTATION_STATUS.md](julia/docs/IMPLEMENTATION_STATUS.md)** - Feature comparison with Python
+- **[COMPLETION_SUMMARY.md](julia/docs/COMPLETION_SUMMARY.md)** - Implementation verification
+- **[API_REQUIREMENTS.md](julia/docs/API_REQUIREMENTS.md)** - REST API design for web editor
+- **[VISFLOW_INTEGRATION_ANALYSIS.md](julia/docs/VISFLOW_INTEGRATION_ANALYSIS.md)** - Web editor integration plan
+- **[CURIO_VS_VISFLOW_COMPARISON.md](julia/docs/CURIO_VS_VISFLOW_COMPARISON.md)** - Frontend technology comparison
 
 ## Python VisTrails (Reference)
 
@@ -216,7 +216,7 @@ git clone https://github.com/ctsilva/VisTrailsJL.git
 cd VisTrailsJL
 
 # Setup Julia environment
-cd julia_starter
+cd julia
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 # Run tests

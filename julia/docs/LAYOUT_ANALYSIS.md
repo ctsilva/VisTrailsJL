@@ -195,7 +195,7 @@ The layout modules **only compute positions**. Actual rendering is in:
 ### Architecture
 
 ```
-julia_starter/src/
+julia/src/
 ├── layout/
 │   ├── workflow_layout.jl      # Port of workflow_layout.py
 │   ├── tree_layout.jl          # Port of tree_layout.py (Walker's algorithm)

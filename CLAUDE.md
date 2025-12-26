@@ -110,7 +110,7 @@ Tests use Python's unittest framework. Test files are organized by package/modul
 
 ## Julia Implementation (VisTrailsJL)
 
-A Julia reimplementation is under development in `julia_starter/`. This provides a modern, notebook-based approach to scientific workflows.
+A Julia reimplementation is under development in `julia/`. This provides a modern, notebook-based approach to scientific workflows.
 
 ### Completed Features (v0.1)
 - ✅ Full .vt file loading (plain XML and ZIP formats)
@@ -142,7 +142,7 @@ The Julia implementation can render workflows even when module packages (VTK, ma
 
 **Status**: ✅ Core implementation complete and tested.
 
-#### Implementation Files (`julia_starter/src/notebook/`)
+#### Implementation Files (`julia/src/notebook/`)
 
 | File | Purpose |
 |------|---------|
@@ -155,7 +155,7 @@ The Julia implementation can render workflows even when module packages (VTK, ma
 #### Running the Julia Implementation
 
 ```bash
-cd julia_starter
+cd julia
 
 # Install dependencies
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
@@ -236,7 +236,7 @@ save_package_code("my_package.ipynb", "my_package.jl")
 vistrail_workflow_to_notebook("examples/gcd.vt", 134; output_path="gcd.ipynb")
 ```
 
-#### Design Documents (in `julia_starter/docs/`)
+#### Design Documents (in `julia/docs/`)
 - `PACKAGE_DEFINITIONS_V2.md` - Package notebook specification
 - `WORKFLOW_DEFINITIONS.md` - Workflow notebook specification
 - `DESIGN_VALIDATION.md` - Validation against real use cases
@@ -260,7 +260,7 @@ vistrail_workflow_to_notebook("examples/gcd.vt", 134; output_path="gcd.ipynb")
 - ✅ Jupyter/Quarto/VSCode compatible
 - ✅ Bidirectional conversion (.vt ↔ notebook ↔ code)
 
-See `julia_starter/docs/V1_ROADMAP.md` for original GUI-based roadmap (deferred in favor of notebook approach).
+See `julia/docs/V1_ROADMAP.md` for original GUI-based roadmap (deferred in favor of notebook approach).
 
 ## Python 3 Migration Analysis
 

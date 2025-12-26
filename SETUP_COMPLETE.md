@@ -17,7 +17,7 @@ Your VisTrailsJL repository is now live at:
 
 Your repository now includes:
 
-### Julia Implementation (`julia_starter/`)
+### Julia Implementation (`julia/`)
 - Complete VisTrailsJL source code
 - All packages (Basic, Julia, Python)
 - Action replay system
@@ -29,7 +29,7 @@ Your repository now includes:
 - [README.md](README.md) - Main project overview
 - [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) - How to work with the repo
 - [CLAUDE.md](CLAUDE.md) - Python VisTrails documentation
-- [julia_starter/docs/](julia_starter/docs/) - 18 implementation docs including:
+- [julia/docs/](julia/docs/) - 18 implementation docs including:
   - API requirements for web editor
   - VisFlow vs Curio comparison
   - Implementation status
@@ -50,7 +50,7 @@ git clone https://github.com/ctsilva/VisTrailsJL.git
 cd VisTrailsJL
 
 # Setup Julia environment
-cd julia_starter
+cd julia
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
 # Test it works
@@ -146,11 +146,11 @@ Visit: https://github.com/ctsilva/VisTrailsJL
 Based on your documentation, the recommended next steps are:
 
 1. **Fork VisFlow** for the web-based workflow editor
-   - See [docs/CURIO_VS_VISFLOW_COMPARISON.md](julia_starter/docs/CURIO_VS_VISFLOW_COMPARISON.md)
+   - See [docs/CURIO_VS_VISFLOW_COMPARISON.md](julia/docs/CURIO_VS_VISFLOW_COMPARISON.md)
    - Timeline: 6-8 weeks for integration
 
 2. **Implement REST API** (Genie.jl backend)
-   - See [docs/API_REQUIREMENTS.md](julia_starter/docs/API_REQUIREMENTS.md)
+   - See [docs/API_REQUIREMENTS.md](julia/docs/API_REQUIREMENTS.md)
    - 20 endpoints defined for MVP
 
 3. **Continue Testing**
@@ -169,7 +169,7 @@ Based on your documentation, the recommended next steps are:
 
 - **Git Documentation**: https://git-scm.com/doc
 - **GitHub Guides**: https://guides.github.com
-- **VisTrailsJL Docs**: See `julia_starter/docs/README.md`
+- **VisTrailsJL Docs**: See `julia/docs/README.md`
 - **Migration Guide**: See `MIGRATION_GUIDE.md`
 
 ## Repository Statistics

@@ -19,7 +19,7 @@ The integration consists of three layers:
 ### 1. Start the Backend Server
 
 ```bash
-cd /Users/csilva/src/VisTrails/julia_starter/backend
+cd /Users/csilva/src/VisTrails/julia/backend
 ./start.sh
 ```
 
@@ -382,7 +382,7 @@ kill -9 <PID>
 ### Julia Package Issues
 
 ```bash
-cd /Users/csilva/src/VisTrails/julia_starter
+cd /Users/csilva/src/VisTrails/julia
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 

@@ -381,7 +381,7 @@ VisTrailsJL/
 │   ├── lung.vt
 │   ├── mta.vt
 │   └── plot.vt
-└── julia_starter/              # Julia implementation
+└── julia/              # Julia implementation
     ├── Project.toml
     ├── README.md
     ├── src/
@@ -424,7 +424,7 @@ VisTrailsJL/
 
 ```julia
 # Start Julia REPL
-julia --project=julia_starter
+julia --project=julia
 
 # Load package
 using VisTrailsJL
@@ -469,9 +469,9 @@ notebook_to_vistrail("workflows/gcd.ipynb", "gcd_new.vt", import_git_history=tru
 ## Questions?
 
 Refer to design documents for details:
-- Package definitions: `julia_starter/docs/PACKAGE_DEFINITIONS_V2.md`
-- Workflow definitions: `julia_starter/docs/WORKFLOW_DEFINITIONS.md`
-- Design validation: `julia_starter/docs/DESIGN_VALIDATION.md`
+- Package definitions: `julia/docs/PACKAGE_DEFINITIONS_V2.md`
+- Workflow definitions: `julia/docs/WORKFLOW_DEFINITIONS.md`
+- Design validation: `julia/docs/DESIGN_VALIDATION.md`
 
 See `CLAUDE.md` for general project context and architecture.
 
