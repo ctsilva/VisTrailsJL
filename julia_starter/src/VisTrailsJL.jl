@@ -40,6 +40,9 @@ include("packages/julia/init.jl")
 include("packages/control_flow/init.jl")
 include("packages/pythoncalc/init.jl")
 
+# Notebook support
+include("notebook/init.jl")
+
 # Exports
 export load_vistrail, execute_pipeline
 export Vistrail, Pipeline, ModuleInstance, Connection
@@ -48,6 +51,20 @@ export print_vistrail_info, print_pipeline_info
 export get_pipeline
 export render_pipeline_svg, save_pipeline_svg
 export render_version_tree_svg, save_version_tree_svg
+
+# Notebook exports
+export parse_notebook, NotebookCell, get_directive, has_directive
+export load_package_from_notebook, register_notebook_package!, NotebookPackage
+export parse_workflow_notebook, build_pipeline_from_workflow, execute_notebook_pipeline
+export NotebookWorkflow, NotebookModuleDef
+
+# Module registry exports
+export module_exists, get_module_descriptor, list_modules
+
+# Conversion exports
+export package_to_notebook, save_package_notebook, registered_package_to_notebook
+export notebook_to_package_code, save_package_code
+export vistrail_workflow_to_notebook, pipeline_to_notebook
 
 # Initialize packages on module load
 function __init__()

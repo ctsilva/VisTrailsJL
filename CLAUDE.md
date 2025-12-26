@@ -136,96 +136,129 @@ A Julia reimplementation is under development in `julia_starter/`. This provides
 ### Key Innovation: Lightweight Rendering
 The Julia implementation can render workflows even when module packages (VTK, matplotlib, etc.) are not installed. It extracts layout and connection information from the action history without requiring module descriptors.
 
-### Current Focus: Notebook-Based Workflow System (v0.2)
+### Notebook-Based Workflow System (v0.2) - IMPLEMENTED
 
 **Vision**: Define workflows and packages using Jupyter notebooks with nbdev-style directives, eliminating the need for a GUI while providing git-native version control.
 
-**Design Documents** (in `julia_starter/docs/`):
-- `PACKAGE_DEFINITIONS_V2.md` - How to define VisTrails packages in notebooks
-- `WORKFLOW_DEFINITIONS.md` - How to define workflows in notebooks
-- `DESIGN_VALIDATION.md` - Validation of notebook-based approach against real use cases
+**Status**: ✅ Core implementation complete and tested.
 
-**Key Concepts**:
+#### Implementation Files (`julia_starter/src/notebook/`)
 
-1. **Package Notebooks** - Define module types with directives:
-   ```julia
-   #| package-meta
-   #| identifier: org.vistrails.vistrails.mypackage
-   #| version: 1.0.0
+| File | Purpose |
+|------|---------|
+| `parser.jl` | Parse `.ipynb` files, extract `#\|` directives |
+| `package_loader.jl` | Load packages from notebooks, register modules |
+| `workflow_parser.jl` | Parse workflows, build pipelines, execute |
+| `conversion.jl` | Convert between notebooks and code/.vt files |
+| `init.jl` | Module initialization |
 
-   #| module: HTTPFile
-   #| output_ports:
-   #|   - name: file
-   #|     signature: basic:String
-   #| parameters:
-   #|   - name: url
-   #|     signature: basic:String
+#### Running the Julia Implementation
 
-   function compute(self::ModuleInstance)
-       url = get_parameter(self, "url")
-       response = HTTP.get(url)
-       set_output(self, "file", String(response.body))
-   end
-   ```
+```bash
+cd julia_starter
 
-2. **Workflow Notebooks** - Define module instances and connections:
-   ```julia
-   #| workflow: covid_analysis
-   #| version: 1
+# Install dependencies
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
 
-   #| module-id: fetch_data
-   #| module-type: basic:HTTPFile
-   #| params:
-   #|   url: "https://api.covid19api.com/summary"
+# Run notebook system tests
+julia --project=. test/notebooks/test_notebook_system.jl
 
-   #| module-id: process
-   #| module-type: julia:JuliaSource
-   #| inputs:
-   #|   data: fetch_data.file
+# Run conversion tests
+julia --project=. test/notebooks/test_conversion.jl
+```
 
-   using JSON
-   data = JSON.parse(get_input("data"))
-   # ... processing logic ...
-   set_output("result", processed_data)
+#### Package Notebooks
 
-   #| execute
-   ```
+Define module types with `#|` directives:
 
-3. **Git-Native Version Control**:
-   - Git commits → VisTrails actions
-   - Git diffs → Module operations (add/delete/modify)
-   - Git history → Version tree
-   - Git branches → Version tree branches
-   - Git tags → VisTrails tags
+```julia
+#| package-meta
+#| identifier: org.vistrails.vistrails.mypackage
+#| version: 1.0.0
 
-4. **Literate Workflows**:
-   - Mix documentation (markdown), workflow definition (directives), and code
-   - Executable notebooks (run to execute workflow)
-   - Quarto integration for publication-ready reports
+#| module: AddOne
+#| input_ports:
+#|   - name: value
+#|     signature: basic:Integer
+#| output_ports:
+#|   - name: result
+#|     signature: basic:Integer
 
-5. **Backward Compatible**:
-   - Round-trip conversion: .vt ↔ notebook
-   - Same concepts as Python VisTrails (Module, Port, compute(), etc.)
-   - Port signature system: `basic:Float`, `basic:String`
-   - Compatible with existing .vt files
+v = get_input("value")
+set_output("result", v + 1)
+```
 
-**Status**: Design validated and approved. Ready for implementation.
+#### Workflow Notebooks
 
-**Next Steps**:
-1. Implement directive parser for package notebooks
-2. Implement directive parser for workflow notebooks
-3. Build diff engine (notebook diffs → VisTrails actions)
-4. Implement execution from notebooks
-5. Build conversion tools (.vt ↔ notebook)
-6. Git history importer (commits → version tree)
+Define module instances and connections:
 
-**Benefits**:
+```julia
+#| workflow: my_computation
+
+#| module-id: const1
+#| module-type: basic:Integer
+#| params:
+#|   - value: 5
+
+#| module-id: add
+#| module-type: mypackage:AddOne
+#| inputs:
+#|   - value: const1.value
+
+#| execute
+```
+
+#### API Usage
+
+```julia
+using VisTrailsJL
+
+# Load and register a package from notebook
+pkg = load_package_from_notebook("my_package.ipynb")
+register_notebook_package!(pkg)
+
+# Load and execute a workflow from notebook
+workflow = parse_workflow_notebook("my_workflow.ipynb")
+pipeline = build_pipeline_from_workflow(workflow)
+results = execute_notebook_pipeline(pipeline)
+```
+
+#### Conversion Tools
+
+```julia
+# Export registered package to notebook
+registered_package_to_notebook("org.vistrails.vistrails.basic", "basic.ipynb")
+
+# Convert notebook to Julia code
+save_package_code("my_package.ipynb", "my_package.jl")
+
+# Convert .vt workflow to notebook
+vistrail_workflow_to_notebook("examples/gcd.vt", 134; output_path="gcd.ipynb")
+```
+
+#### Design Documents (in `julia_starter/docs/`)
+- `PACKAGE_DEFINITIONS_V2.md` - Package notebook specification
+- `WORKFLOW_DEFINITIONS.md` - Workflow notebook specification
+- `DESIGN_VALIDATION.md` - Validation against real use cases
+
+#### Remaining Work (v0.2+)
+
+| Feature | Status |
+|---------|--------|
+| Directive parser | ✅ Complete |
+| Package loading | ✅ Complete |
+| Workflow parsing | ✅ Complete |
+| Pipeline execution | ✅ Complete |
+| Conversion tools | ✅ Complete |
+| Diff engine | 🔲 Not started |
+| Git history import | 🔲 Not started |
+
+#### Benefits
 - ✅ No GUI required for complete workflow system
 - ✅ Git for version control (standard tools, GitHub PRs)
 - ✅ Literate programming (documentation + code)
 - ✅ Jupyter/Quarto/VSCode compatible
-- ✅ Faster development (6-9 weeks vs 8-11 weeks for GUI)
-- ✅ More collaborative (GitHub workflow)
+- ✅ Bidirectional conversion (.vt ↔ notebook ↔ code)
 
 See `julia_starter/docs/V1_ROADMAP.md` for original GUI-based roadmap (deferred in favor of notebook approach).
 
