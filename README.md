@@ -265,11 +265,14 @@ julia --project=. -e 'using Test; include("test/runtests.jl")'
 If you use VisTrailsJL in your research, please cite:
 
 ```bibtex
-@article{vistrails2006,
-  title={VisTrails: enabling interactive multiple-view visualizations},
-  author={Callahan, Steven P and Freire, Juliana and Santos, Emanuele and Scheidegger, Carlos E and Silva, Claudio T and Vo, Huy T},
-  journal={IEEE Visualization},
-  year={2006}
+@inproceedings{vistrails2006,
+  title={VisTrails: visualization meets data management},
+  author={Bavoil, Louis and Callahan, Steven P and Crossno, Patricia J and Freire, Juliana and Scheidegger, Carlos E and Silva, Cl{\'a}udio T and Vo, Huy T},
+  booktitle={Proceedings of the 2006 ACM SIGMOD International Conference on Management of Data},
+  pages={745--747},
+  year={2006},
+  organization={ACM},
+  doi={10.1145/1142473.1142574}
 }
 
 @software{vistrailsjl2025,
