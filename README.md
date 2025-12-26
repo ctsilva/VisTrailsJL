@@ -267,7 +267,7 @@ If you use VisTrailsJL in your research, please cite:
 ```bibtex
 @inproceedings{vistrails2006,
   title={VisTrails: visualization meets data management},
-  author={Bavoil, Louis and Callahan, Steven P and Crossno, Patricia J and Freire, Juliana and Scheidegger, Carlos E and Silva, Cl{\'a}udio T and Vo, Huy T},
+  author={Callahan, Steven P and and Freire, Juliana and Scheidegger, Carlos E and Silva, Cl{\'a}udio T and Vo, Huy T},
   booktitle={Proceedings of the 2006 ACM SIGMOD International Conference on Management of Data},
   pages={745--747},
   year={2006},
