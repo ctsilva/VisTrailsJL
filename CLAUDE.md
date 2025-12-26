@@ -260,7 +260,7 @@ vistrail_workflow_to_notebook("examples/gcd.vt", 134; output_path="gcd.ipynb")
 - ✅ Jupyter/Quarto/VSCode compatible
 - ✅ Bidirectional conversion (.vt ↔ notebook ↔ code)
 
-See `julia/docs/V1_ROADMAP.md` for original GUI-based roadmap (deferred in favor of notebook approach).
+See [VisFlow-Lite](https://github.com/ctsilva/VisFlow-Lite) for the separate viewer project.
 
 ## Python 3 Migration Analysis
 
