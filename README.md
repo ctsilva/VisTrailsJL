@@ -17,10 +17,11 @@ VisTrails is an open-source scientific workflow and provenance management system
 
 VisTrailsJL is a complete Julia reimplementation that:
 - ✅ **Reads existing .vt files** - Full compatibility with Python VisTrails workflows
+- ✅ **Notebook-based workflows** - Define workflows in Jupyter notebooks with `#|` directives
 - ✅ **Executes workflows** - Supports Julia modules and Python code via PyCall.jl
 - ✅ **Maintains provenance** - Action-based versioning with replay capability
 - ✅ **Renders workflows** - SVG output for workflows and version trees
-- ✅ **Matches architecture** - Mirrors Python structure for easy comparison
+- ✅ **Git-native version control** - Standard git tools replace custom versioning
 - ⚡ **Enhanced performance** - Leverages Julia's speed for computational workflows
 
 ## Repository Structure
@@ -52,56 +53,80 @@ VisTrailsJL is a complete Julia reimplementation that:
 
 ### Installation
 
-```julia
-# Navigate to julia directory
+```bash
 cd julia
-
-# Activate the project
-using Pkg
-Pkg.activate(".")
-Pkg.instantiate()
-
-using VisTrailsJL
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
-### Load and Execute a Workflow
+### Notebook-Based Workflows (Recommended)
+
+Define workflows in Jupyter notebooks using `#|` directives:
+
+**Package Notebook** (`my_package.ipynb`):
+```julia
+#| package-meta
+#| identifier: org.example.mypackage
+#| version: 1.0.0
+
+#| module: AddOne
+#| input_ports:
+#|   - name: value
+#|     signature: basic:Integer
+#| output_ports:
+#|   - name: result
+#|     signature: basic:Integer
+
+v = get_input("value")
+set_output("result", v + 1)
+```
+
+**Workflow Notebook** (`my_workflow.ipynb`):
+```julia
+#| workflow: my_computation
+
+#| module-id: input
+#| module-type: basic:Integer
+#| params:
+#|   - value: 5
+
+#| module-id: process
+#| module-type: mypackage:AddOne
+#| inputs:
+#|   - value: input.value
+
+#| execute
+```
+
+**Execute from Julia**:
+```julia
+using VisTrailsJL
+
+# Load and register package
+pkg = load_package_from_notebook("my_package.ipynb")
+register_notebook_package!(pkg)
+
+# Execute workflow
+workflow = parse_workflow_notebook("my_workflow.ipynb")
+pipeline = build_pipeline_from_workflow(workflow)
+results = execute_notebook_pipeline(pipeline)
+```
+
+### Load Existing .vt Files
 
 ```julia
+using VisTrailsJL
+
 # Load an existing .vt file
 vt = load_vistrail("../examples/gcd.vt")
 
 # Get the latest workflow version
 workflow = get_pipeline(vt)
 
-# Execute it
-results = execute_pipeline(workflow)
-
 # Render workflow as SVG
 render_pipeline_svg(workflow, "workflow.svg")
 
-# Render version tree
-render_version_tree_svg(vt, "versions.svg")
-```
-
-### Create a New Workflow
-
-```julia
-using VisTrailsJL
-
-# Create a new pipeline
-pipeline = Pipeline()
-
-# Add modules
-mod1 = add_module(pipeline, "org.vistrails.vistrails.basic", "Integer")
-mod2 = add_module(pipeline, "org.vistrails.vistrails.basic", "Integer")
-mod3 = add_module(pipeline, "org.vistrails.vistrails.basic", "Add")
-
-# Connect modules
-connect_modules(pipeline, mod1, "value", mod3, "input1")
-connect_modules(pipeline, mod2, "value", mod3, "input2")
-
-# Execute
-results = execute_pipeline(pipeline)
+# Convert to notebook format
+vistrail_workflow_to_notebook("../examples/gcd.vt", 134; output_path="gcd.ipynb")
 ```
 
 ## Implementation Status
@@ -126,6 +151,12 @@ All core functionality is implemented and tested:
 - **Julia Package**: JuliaSource, JuliaCalc (execute Julia code)
 - **Python Package**: PythonSource, PythonCalc (via PyCall.jl)
 
+**Notebook System (v0.2):**
+- Directive parser for `#|` notebook annotations
+- Package loading from notebooks
+- Workflow parsing and execution
+- Bidirectional conversion (.vt ↔ notebook ↔ code)
+
 **Advanced Features:**
 - Lightweight rendering (render workflows without loading packages)
 - XML character escaping for special characters
@@ -134,10 +165,10 @@ All core functionality is implemented and tested:
 
 ### 🚧 Future Enhancements
 
-- Full interpreter with caching (currently direct execution)
+- Diff engine (notebook diffs → VisTrails actions)
+- Git history import (commits → version tree)
 - VTK package for 3D visualization
 - Matplotlib package for plotting
-- Web-based workflow editor (in progress - see [docs/](julia/docs/))
 
 ## Documentation
 
@@ -175,8 +206,9 @@ See [CLAUDE.md](CLAUDE.md) for detailed Python VisTrails documentation.
 1. **Preserve VisTrails' Research** - 20 years of provenance research shouldn't be lost to Python 2 obsolescence
 2. **Modern Performance** - Julia's JIT compilation for scientific computing workflows
 3. **Maintain Compatibility** - Read/write existing .vt files for seamless migration
-4. **Web-Based UI** - Replace PyQt4 with modern web interface (React/Vue)
-5. **Extensibility** - Easy package development in Julia
+4. **Git-Native Versioning** - Use standard git for version control instead of custom system
+5. **Notebook-Based Workflows** - Define workflows in Jupyter notebooks, no GUI required
+6. **Extensibility** - Easy package development in Julia
 
 ## Migration from Python VisTrails
 
@@ -262,4 +294,4 @@ If you use VisTrailsJL in your research, please cite:
 
 ---
 
-**Status**: ✅ Production-ready (Core functionality complete, web UI in development)
+**Status**: ✅ Production-ready (Core + notebook-based workflow system complete)
