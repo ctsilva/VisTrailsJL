@@ -294,4 +294,4 @@ If you use VisTrailsJL in your research, please cite:
 
 ---
 
-**Status**: ✅ Production-ready (Core + notebook-based workflow system complete)
+**Status**: Active development (Core v0.1 + notebook system v0.2 complete)
