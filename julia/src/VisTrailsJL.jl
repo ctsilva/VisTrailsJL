@@ -40,6 +40,7 @@ include("packages/basic/init.jl")
 include("packages/julia/init.jl")
 include("packages/control_flow/init.jl")
 include("packages/pythoncalc/init.jl")
+include("packages/matplotlib/init.jl")
 
 # Notebook support
 include("notebook/init.jl")
@@ -74,6 +75,7 @@ function __init__()
     initialize_julia_package!()
     initialize_control_flow_package!()
     initialize_pythoncalc_package!()
+    initialize_matplotlib_package!()
 end
 
 end # module
