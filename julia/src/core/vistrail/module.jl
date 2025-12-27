@@ -5,6 +5,28 @@ Modules are the computational units in a VisTrails workflow.
 """
 
 """
+ModuleError
+
+Error type for module execution failures.
+Compatible with Python VisTrails' ModuleError.
+"""
+struct ModuleError <: Exception
+    module_instance::Union{Any, Nothing}  # Will be ModuleInstance after it's defined
+    message::String
+
+    ModuleError(mod, msg::String) = new(mod, msg)
+    ModuleError(msg::String) = new(nothing, msg)
+end
+
+function Base.showerror(io::IO, e::ModuleError)
+    if e.module_instance !== nothing
+        print(io, "ModuleError in $(e.module_instance.descriptor.name): $(e.message)")
+    else
+        print(io, "ModuleError: $(e.message)")
+    end
+end
+
+"""
 PortSpec
 
 Port specification from workflow XML.

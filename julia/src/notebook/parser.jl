@@ -114,9 +114,24 @@ end
 Parse YAML-style nested directives (lists and dicts).
 """
 function parse_nested_directives(lines, start_index)
-    result = []
+    # Check if this is a list or dict by looking at first line
+    is_list = false
+    result_dict = Dict{String, Any}()
+    result_list = []
     current_item = nothing
     i = start_index
+
+    # Peek at first line to determine structure
+    if i <= length(lines)
+        first_line = lines[i]
+        first_stripped = strip(first_line)
+        if startswith(first_stripped, "#|")
+            first_content = strip(first_stripped[3:end])
+            if startswith(first_content, "- ")
+                is_list = true
+            end
+        end
+    end
 
     while i <= length(lines)
         line = lines[i]
@@ -127,22 +142,45 @@ function parse_nested_directives(lines, start_index)
             break
         end
 
-        content = strip(stripped[3:end])
+        # Get content AFTER "#|" (preserving indentation)
+        directive_prefix_end = findfirst("#|", stripped)[end] + 1
+        if directive_prefix_end > length(stripped)
+            content = ""
+        else
+            content = stripped[directive_prefix_end:end]
+        end
 
-        if isempty(content)
+        # Strip the single space that's typically after "#|" (if present)
+        # This is YAML formatting, not indentation
+        if !isempty(content) && content[1] == ' '
+            content = content[2:end]
+        end
+
+        # NOW check if this line is indented (starts with space/tab for nesting)
+        is_indented = !isempty(content) && (content[1] == ' ' || content[1] == '\t')
+        content_stripped = strip(content)
+
+        if isempty(content_stripped)
             i += 1
             continue
         end
 
+        # If not indented and contains ":", this is a new top-level directive
+        if !is_indented && occursin(":", content_stripped) && !startswith(content_stripped, "- ")
+            # New top-level directive - stop parsing nested
+            break
+        end
+
         # Check indentation level by looking at content
-        if startswith(content, "- ")
-            # New list item
+        if startswith(content_stripped, "- ")
+            # List item
+            is_list = true
             if current_item !== nothing
-                push!(result, current_item)
+                push!(result_list, current_item)
             end
 
             # Parse the rest of the line after "- "
-            item_content = strip(content[3:end])
+            item_content = strip(content_stripped[3:end])
 
             if occursin(":", item_content)
                 # It's a dict-like item: "- name: value"
@@ -154,12 +192,19 @@ function parse_nested_directives(lines, start_index)
                 # Simple list item
                 current_item = parse_value(item_content)
             end
-        elseif occursin(":", content) && current_item isa Dict
-            # Continuation of dict item
-            colon_pos = findfirst(':', content)
-            key = strip(content[1:colon_pos-1])
-            value = strip(content[colon_pos+1:end])
-            current_item[key] = parse_value(value)
+        elseif occursin(":", content_stripped)
+            # Key-value pair (must be indented if we get here)
+            colon_pos = findfirst(':', content_stripped)
+            key = strip(content_stripped[1:colon_pos-1])
+            value = strip(content_stripped[colon_pos+1:end])
+
+            if is_list && current_item isa Dict
+                # Continuation of list item dict
+                current_item[key] = parse_value(value)
+            else
+                # Dict key-value (nested item)
+                result_dict[key] = parse_value(value)
+            end
         else
             # Something else - end parsing
             break
@@ -168,11 +213,13 @@ function parse_nested_directives(lines, start_index)
         i += 1
     end
 
-    # Add last item
-    if current_item !== nothing
-        push!(result, current_item)
+    # Add last list item if any
+    if is_list && current_item !== nothing
+        push!(result_list, current_item)
     end
 
+    # Return appropriate structure
+    result = is_list ? result_list : result_dict
     return result, i - 1
 end
 

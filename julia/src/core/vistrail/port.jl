@@ -16,9 +16,10 @@ struct InputPort <: Port
     type::Type
     optional::Bool
     default::Union{Nothing, Any}
+    label::String
 
-    InputPort(name::String, type::Type=Any; optional::Bool=false, default=nothing) =
-        new(name, type, optional, default)
+    InputPort(name::String, type::Type=Any; optional::Bool=false, default=nothing, label::String="") =
+        new(name, type, optional, default, label)
 end
 
 """
@@ -29,8 +30,9 @@ Defines an output port on a module.
 struct OutputPort <: Port
     name::String
     type::Type
+    label::String
 
-    OutputPort(name::String, type::Type=Any) = new(name, type)
+    OutputPort(name::String, type::Type=Any; label::String="") = new(name, type, label)
 end
 
 # Utility functions

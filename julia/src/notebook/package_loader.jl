@@ -82,9 +82,10 @@ function parse_input_port_specs(specs)
             name = string(get(spec, "name", "unnamed"))
             sig = string(get(spec, "signature", "basic:Any"))
             optional = get(spec, "optional", false)
+            label = string(get(spec, "label", ""))
 
             julia_type = signature_to_type(sig)
-            push!(ports, InputPort(name, julia_type, optional=optional))
+            push!(ports, InputPort(name, julia_type, optional=optional, label=label))
         end
     end
     return ports
@@ -101,9 +102,10 @@ function parse_output_port_specs(specs)
         if spec isa Dict
             name = string(get(spec, "name", "unnamed"))
             sig = string(get(spec, "signature", "basic:Any"))
+            label = string(get(spec, "label", ""))
 
             julia_type = signature_to_type(sig)
-            push!(ports, OutputPort(name, julia_type))
+            push!(ports, OutputPort(name, julia_type, label=label))
         end
     end
     return ports
