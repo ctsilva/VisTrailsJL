@@ -76,7 +76,7 @@ println("=" ^ 60)
         code = notebook_to_package_code(test_pkg_path)
 
         # Check generated code structure
-        @test occursin("Package: test.basic", code)
+        @test occursin("Package: test.testpkg", code)
         @test occursin("struct AddOneModule", code)
         @test occursin("struct DoubleModule", code)
         @test occursin("function compute(mod::ModuleInstance, ::Type{AddOneModule})", code)

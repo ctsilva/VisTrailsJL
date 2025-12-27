@@ -26,7 +26,7 @@ println("=" ^ 60)
         # Check package-meta cell
         meta_cells = filter(c -> has_directive(c, "package-meta"), cells)
         @test length(meta_cells) == 1
-        @test get_directive(meta_cells[1], "identifier") == "test.basic"
+        @test get_directive(meta_cells[1], "identifier") == "test.testpkg"
 
         # Check module cells
         module_cells = filter(c -> has_directive(c, "module"), cells)
@@ -39,7 +39,7 @@ println("=" ^ 60)
         package_path = joinpath(@__DIR__, "test_package.ipynb")
         pkg = load_package_from_notebook(package_path)
 
-        @test pkg.identifier == "test.basic"
+        @test pkg.identifier == "test.testpkg"
         @test pkg.version == "1.0.0"
         @test length(pkg.modules) == 2
 
@@ -52,8 +52,8 @@ println("=" ^ 60)
         register_notebook_package!(pkg)
 
         # Check modules are registered
-        @test module_exists("test.basic", "AddOne")
-        @test module_exists("test.basic", "Double")
+        @test module_exists("test.testpkg", "AddOne")
+        @test module_exists("test.testpkg", "Double")
 
         println("  ✓ Package loading tests passed")
     end
@@ -78,10 +78,11 @@ println("=" ^ 60)
     @testset "Pipeline Building" begin
         workflow_path = joinpath(@__DIR__, "test_workflow.ipynb")
         workflow = parse_workflow_notebook(workflow_path)
-        pipeline = build_pipeline_from_workflow(workflow)
+        pipeline, id_to_module = build_pipeline_from_workflow(workflow)
 
         @test length(pipeline.modules) == 3
         @test length(pipeline.connections) == 2
+        @test length(id_to_module) == 3
 
         println("  ✓ Pipeline building tests passed")
     end
@@ -89,15 +90,15 @@ println("=" ^ 60)
     @testset "Execution" begin
         workflow_path = joinpath(@__DIR__, "test_workflow.ipynb")
         workflow = parse_workflow_notebook(workflow_path)
-        pipeline = build_pipeline_from_workflow(workflow)
+        pipeline, id_to_module = build_pipeline_from_workflow(workflow)
 
-        results = execute_notebook_pipeline(pipeline)
+        cache, workflow_outputs = execute_notebook_pipeline(pipeline, workflow; id_to_module=id_to_module)
 
         # Find the Double module result
         double_result = nothing
         for (id, mod) in pipeline.modules
             if mod.descriptor.name == "Double"
-                double_result = results[id]["result"]
+                double_result = cache[id]["result"]
                 break
             end
         end
