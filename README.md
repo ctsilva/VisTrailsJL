@@ -11,7 +11,7 @@ VisTrails is an open-source scientific workflow and provenance management system
 - Comprehensive history tracking and version control
 - Action-based provenance with branching/merging
 - Workflow replay and diff capabilities
-- 20+ years of research from the University of Utah
+- 20+ years of research from the University of Utah and New York University
 
 ## What is VisTrailsJL?
 
@@ -203,7 +203,7 @@ See [CLAUDE.md](CLAUDE.md) for detailed Python VisTrails documentation.
 
 ## Project Goals
 
-1. **Preserve VisTrails' Research** - 20 years of provenance research shouldn't be lost to Python 2 obsolescence
+1. **Preserve VisTrails' Research** - 20+ years of provenance research from the University of Utah and New York University shouldn't be lost to Python 2 obsolescence
 2. **Modern Performance** - Julia's JIT compilation for scientific computing workflows
 3. **Maintain Compatibility** - Read/write existing .vt files for seamless migration
 4. **Git-Native Versioning** - Use standard git for version control instead of custom system
