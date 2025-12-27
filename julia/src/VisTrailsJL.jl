@@ -33,6 +33,7 @@ include("rendering/workflow_svg.jl")
 include("rendering/tree_layout.jl")
 include("rendering/version_tree_layout.jl")
 include("rendering/version_tree_svg.jl")
+include("rendering/auto_layout.jl")
 
 # Packages
 include("packages/basic/init.jl")
@@ -51,6 +52,7 @@ export print_vistrail_info, print_pipeline_info
 export get_pipeline
 export render_pipeline_svg, save_pipeline_svg
 export render_version_tree_svg, save_version_tree_svg
+export auto_layout_pipeline!, ensure_layout!, has_layout_positions
 
 # Notebook exports
 export parse_notebook, NotebookCell, get_directive, has_directive

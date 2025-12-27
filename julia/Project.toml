@@ -7,6 +7,7 @@ authors = ["VisTrails Team"]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 EzXML = "8f5d6c58-4d21-5cfd-889c-e3ad7ee6a615"
 Genie = "c43c736e-a2d1-11e8-161f-af95117fbd1e"
+Graphviz_jll = "3c863552-8265-54e4-a6dc-903eb78fde85"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
@@ -14,6 +15,7 @@ ZipFile = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
 
 [compat]
 EzXML = "1"
+Graphviz_jll = "2.50.0"
 HTTP = "1"
 JSON = "0.21"
 PyCall = "1.96.4"

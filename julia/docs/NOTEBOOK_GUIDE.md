@@ -445,6 +445,61 @@ Check if parameter is set.
 
 ---
 
+## Rendering Workflows to SVG
+
+VisTrailsJL can render notebook workflows to SVG format for visualization and documentation.
+
+### Basic Rendering
+
+```julia
+# Load and build workflow
+workflow = parse_workflow_notebook("my_workflow.ipynb")
+pipeline, _ = build_pipeline_from_workflow(workflow)
+
+# Render to SVG (automatic layout using Graphviz)
+svg = render_pipeline_svg(pipeline, width=1200, height=800)
+
+# Save to file
+write("workflow.svg", svg)
+```
+
+### Automatic Layout
+
+Notebook workflows don't have visual layout positions by default. VisTrailsJL uses **Graphviz** to automatically compute hierarchical layouts:
+
+```julia
+# Explicit auto-layout
+auto_layout_pipeline!(pipeline, algorithm="dot")
+
+# Or use render_pipeline_svg (auto-layout by default)
+svg = render_pipeline_svg(pipeline)  # Automatically uses Graphviz
+```
+
+### Layout Algorithms
+
+Choose different Graphviz layout algorithms:
+
+```julia
+# Hierarchical (best for workflows/DAGs)
+auto_layout_pipeline!(pipeline, algorithm="dot")
+
+# Force-directed
+auto_layout_pipeline!(pipeline, algorithm="fdp")
+
+# Circular
+auto_layout_pipeline!(pipeline, algorithm="circo")
+```
+
+### Disable Auto-Layout
+
+If you want to control layout manually:
+
+```julia
+svg = render_pipeline_svg(pipeline, auto_layout=false)
+```
+
+---
+
 ## Tips and Best Practices
 
 ### 1. Organize Your Workflows

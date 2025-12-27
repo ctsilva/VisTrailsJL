@@ -122,7 +122,7 @@ end
 """
     render_pipeline_svg(pipeline::Pipeline; kwargs...)
 
-Render a pipeline to SVG using stored layout positions.
+Render a pipeline to SVG. Automatically computes layout positions if not present.
 
 # Arguments
 - `pipeline::Pipeline`: The pipeline to render
@@ -132,6 +132,7 @@ Render a pipeline to SVG using stored layout positions.
 - `module_height::Float64=60.0`: Default module height
 - `port_size::Float64=8.0`: Port square size
 - `margin::Float64=50.0`: Canvas margin
+- `auto_layout::Bool=true`: Automatically compute layout if positions missing
 
 # Returns
 - `String`: SVG XML content
@@ -143,7 +144,8 @@ function render_pipeline_svg(pipeline::Pipeline;
                              module_width::Float64=120.0,
                              module_height::Float64=60.0,
                              port_size::Float64=8.0,
-                             margin::Float64=50.0)
+                             margin::Float64=50.0,
+                             auto_layout::Bool=true)
 
     io = IOBuffer()
 
@@ -152,14 +154,24 @@ function render_pipeline_svg(pipeline::Pipeline;
                           if mod.layout_position !== nothing]
 
     if isempty(positioned_modules)
-        @warn "No layout positions found - rendering empty SVG"
-        println(io, """<?xml version="1.0" encoding="UTF-8"?>""")
-        println(io, """<svg width="$width" height="$height" xmlns="http://www.w3.org/2000/svg">""")
-        println(io, """  <text x="$(width/2)" y="$(height/2)" text-anchor="middle" fill="#999">""")
-        println(io, """    No layout positions available""")
-        println(io, """  </text>""")
-        println(io, """</svg>""")
-        return String(take!(io))
+        if auto_layout
+            # Compute automatic layout using Graphviz
+            auto_layout_pipeline!(pipeline, algorithm="dot")
+            # Recompute positioned modules
+            positioned_modules = [(id, mod) for (id, mod) in pipeline.modules
+                                  if mod.layout_position !== nothing]
+        end
+
+        if isempty(positioned_modules)
+            @warn "No layout positions found and auto-layout disabled - rendering empty SVG"
+            println(io, """<?xml version="1.0" encoding="UTF-8"?>""")
+            println(io, """<svg width="$width" height="$height" xmlns="http://www.w3.org/2000/svg">""")
+            println(io, """  <text x="$(width/2)" y="$(height/2)" text-anchor="middle" fill="#999">""")
+            println(io, """    No layout positions available""")
+            println(io, """  </text>""")
+            println(io, """</svg>""")
+            return String(take!(io))
+        end
     end
 
     # Find bounding box from module positions
