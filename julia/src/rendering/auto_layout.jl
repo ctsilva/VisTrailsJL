@@ -114,9 +114,16 @@ Parse Graphviz plain format output to extract node positions.
 
 Plain format has lines like:
   node n1 x y width height label style shape color fillcolor
+
+Graphviz outputs positions in inches by default. We scale them to points
+(1 inch = 72 points) to get a reasonable coordinate system similar to VisTrails.
 """
 function parse_plain_format(filename::String)
     positions = Dict{Int, Tuple{Float64, Float64}}()
+
+    # Graphviz uses inches; convert to points (72 DPI)
+    # This gives us a coordinate system similar to VisTrails
+    INCHES_TO_POINTS = 72.0
 
     for line in eachline(filename)
         parts = split(line)
@@ -125,8 +132,13 @@ function parse_plain_format(filename::String)
             node_name = parts[2]
             if startswith(node_name, "n")
                 node_id = parse(Int, node_name[2:end])
-                x = parse(Float64, parts[3])
-                y = parse(Float64, parts[4])
+                x_inches = parse(Float64, parts[3])
+                y_inches = parse(Float64, parts[4])
+
+                # Convert inches to points for a more reasonable coordinate system
+                x = x_inches * INCHES_TO_POINTS
+                y = y_inches * INCHES_TO_POINTS
+
                 positions[node_id] = (x, y)
             end
         end
