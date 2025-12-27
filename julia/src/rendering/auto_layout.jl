@@ -53,6 +53,12 @@ function generate_dot_string(pipeline::Pipeline)
     println(io, "  rankdir=TB;")  # Top to bottom layout
     println(io, "  node [shape=box];")
 
+    # Add spacing controls to prevent overlap
+    # nodesep: minimum space between nodes in same rank (in inches)
+    # ranksep: minimum space between ranks (in inches)
+    println(io, "  nodesep=1.0;")  # 1 inch = 72 points horizontal spacing
+    println(io, "  ranksep=1.5;")  # 1.5 inches = 108 points vertical spacing
+
     # Add nodes
     for (id, mod) in pipeline.modules
         label = get(mod.annotations, "__desc__", mod.descriptor.name)

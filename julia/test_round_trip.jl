@@ -20,7 +20,7 @@ println("\n1. Loading .vt file...")
 vt_path = joinpath(@__DIR__, "..", "examples", "gcd.vt")
 vt = load_vistrail(vt_path)
 println("   ✓ Loaded: $(vt.name)")
-println("   Versions: $(length(vt.action_annotations))")
+println("   Versions: $(length(vt.actions))")
 
 # 2. Get a workflow from a specific version
 println("\n2. Getting pipeline from version 22...")
