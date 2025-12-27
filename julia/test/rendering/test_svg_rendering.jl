@@ -2,16 +2,15 @@
 Test SVG rendering of workflows with existing layout positions
 """
 
-using Pkg
-Pkg.activate(@__DIR__)
-
-using VisTrailsJL
+# Load VisTrailsJL module
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
+using .VisTrailsJL
 
 println("=" ^ 60)
 println("Testing SVG Rendering with Existing Positions")
 println("=" ^ 60)
 
-vt_file = joinpath(@__DIR__, "..", "examples", "gcd.vt")
+vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 
 println("\nLoading $vt_file...")
 

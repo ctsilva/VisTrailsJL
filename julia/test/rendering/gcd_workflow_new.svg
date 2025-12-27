@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .module {
+        fill: #f5f5f5;
+        stroke: #333;
+        stroke-width: 2;
+      }
+      .module-text {
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        font-weight: bold;
+        fill: #333;
+        text-anchor: middle;
+        dominant-baseline: middle;
+      }
+      .port {
+        fill: #666;
+        stroke: #333;
+        stroke-width: 1;
+      }
+      .connection {
+        stroke: #000;
+        stroke-width: 2;
+        fill: none;
+        stroke-opacity: 1.0;
+      }
+    </style>
+  </defs>
+
+  <!-- Modules -->
+  <g class="module-group" id="module-2">
+    <rect class="module" x="88.31872513029998" y="148.52557774700003" width="157.60000000000002" height="70.0" rx="5"/>
+    <text class="module-text" x="167.1187251303" y="183.52557774700003">StandardOutput</text>
+    <rect class="port" x="96.31872513029998" y="156.52557774700003" width="6.0" height="6.0"/>
+  </g>
+  <g class="module-group" id="module-1">
+    <rect class="module" x="40.0" y="40.0" width="140.0" height="70.0" rx="5"/>
+    <text class="module-text" x="110.0" y="75.0">While</text>
+    <rect class="port" x="166.0" y="96.0" width="6.0" height="6.0"/>
+  </g>
+
+  <!-- Connections -->
+  <path class="connection" d="M 169.0,99.0 C 169.0,123.21023109880001 99.31872513029998,135.3153466482 99.31872513029998,159.52557774700003"/>
+
+</svg>

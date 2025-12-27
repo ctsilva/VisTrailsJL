@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="800" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .version-node {
+        fill: #f0e68c;
+        stroke: #333;
+        stroke-width: 2;
+      }
+      .version-node-tagged {
+        fill: #daa520;
+        stroke: #333;
+        stroke-width: 2;
+      }
+      .version-node-current {
+        fill: #ff8c00;
+        stroke: #333;
+        stroke-width: 3;
+      }
+      .version-text {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        fill: #333;
+        text-anchor: middle;
+        dominant-baseline: middle;
+      }
+      .version-edge {
+        stroke: #333;
+        stroke-width: 2;
+        fill: none;
+      }
+      .version-edge-collapsed {
+        stroke: #666;
+        stroke-width: 2;
+        stroke-dasharray: 5, 5;
+        fill: none;
+      }
+    </style>
+  </defs>
+
+  <!-- Edges -->
+  <line class="version-edge-collapsed" x1="110.0" y1="85.0" x2="110.0" y2="165.0"/>
+  <line class="version-edge-collapsed" x1="110.0" y1="200.0" x2="110.0" y2="280.0"/>
+
+  <!-- Nodes -->
+  <g class="version-group" id="version-0">
+    <ellipse class="version-node" cx="110.0" cy="67.5" rx="60.0" ry="17.5"/>
+    <text class="version-text" x="110.0" y="67.5">0</text>
+  </g>
+  <g class="version-group" id="version-71">
+    <ellipse class="version-node" cx="110.0" cy="182.5" rx="60.0" ry="17.5"/>
+    <text class="version-text" x="110.0" y="182.5">71</text>
+  </g>
+  <g class="version-group" id="version-134">
+    <ellipse class="version-node-current" cx="110.0" cy="297.5" rx="60.0" ry="17.5"/>
+    <text class="version-text" x="110.0" y="297.5">134</text>
+  </g>
+</svg>

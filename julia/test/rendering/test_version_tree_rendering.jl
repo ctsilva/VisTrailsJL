@@ -2,16 +2,16 @@
 Test version tree SVG rendering
 """
 
-using Pkg
-Pkg.activate(@__DIR__)
+# Load VisTrailsJL module
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
+using .VisTrailsJL
 
-using VisTrailsJL
 
 println("=" ^ 60)
 println("Testing Version Tree SVG Rendering")
 println("=" ^ 60)
 
-vt_file = joinpath(@__DIR__, "..", "examples", "gcd.vt")
+vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 
 println("\nLoading $vt_file...")
 vt = load_vistrail(vt_file)

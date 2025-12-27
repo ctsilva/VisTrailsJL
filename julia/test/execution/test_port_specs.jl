@@ -1,9 +1,8 @@
-using Pkg
-Pkg.activate(@__DIR__)
+# Load VisTrailsJL module
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
+using .VisTrailsJL
 
-using VisTrailsJL
-
-vt = load_vistrail("../examples/gcd.vt")
+vt = load_vistrail(joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt"))
 p = vt.pipelines[vt.current_version]
 
 println("\nModule Port Counts (from parsed portSpecs):")

@@ -23,8 +23,8 @@ for (op, v1, v2, expected) in [("+", 5.0, 3.0, 8.0),
     
     add_connection!(pipeline, a, "value", calc, "value1")
     add_connection!(pipeline, b, "value", calc, "value2")
-    
-    results = execute_pipeline(pipeline)
+
+    results, _ = execute_pipeline(pipeline)
     result = results[calc.id]["value"]
     
     status = abs(result - expected) < 0.0001 ? "✓" : "✗"
@@ -62,7 +62,7 @@ stats = {
 
 add_connection!(pipeline2, nums, "value", py_src, "nums")
 
-results2 = execute_pipeline(pipeline2)
+results2, _ = execute_pipeline(pipeline2)
 if haskey(results2[py_src.id], "stats")
     stats = results2[py_src.id]["stats"]
     println("  Input: 1,2,3,4,5")
@@ -98,7 +98,7 @@ except ImportError:
     has_numpy = False
 """)
 
-results3 = execute_pipeline(pipeline3)
+results3, _ = execute_pipeline(pipeline3)
 if haskey(results3[py_numpy.id], "result")
     println("  ", results3[py_numpy.id]["result"])
     if haskey(results3[py_numpy.id], "has_numpy")

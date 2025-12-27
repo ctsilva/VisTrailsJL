@@ -2,12 +2,11 @@
 Debug PythonCalc parameters
 """
 
-using Pkg
-Pkg.activate(@__DIR__)
+# Load VisTrailsJL module
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
+using .VisTrailsJL
 
-using VisTrailsJL
-
-vt_file = joinpath(@__DIR__, "..", "examples", "gcd.vt")
+vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 
 println("Loading version 100...")
 vt = load_vistrail(vt_file, version=100)

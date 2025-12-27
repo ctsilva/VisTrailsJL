@@ -2,17 +2,17 @@
 Test pipeline rendering improvements on gcd.vt workflow
 """
 
-using Pkg
-Pkg.activate(@__DIR__)
+# Load VisTrailsJL module
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
+using .VisTrailsJL
 
-using VisTrailsJL
 
 println("=" ^ 70)
 println("Testing Pipeline Rendering")
 println("=" ^ 70)
 
 # Load gcd.vt (current version has full workflow with positions)
-vt_file = joinpath(@__DIR__, "..", "examples", "gcd.vt")
+vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 println("\nLoading $vt_file...")
 vt = load_vistrail(vt_file)
 

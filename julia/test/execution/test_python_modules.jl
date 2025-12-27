@@ -25,7 +25,7 @@ add_connection!(pipeline, b, "value", calc, "value2")
 
 # Execute
 println("  Executing: 5.0 + 3.0")
-results = execute_pipeline(pipeline)
+results, workflow_exec = execute_pipeline(pipeline)
 result_value = results[calc.id]["value"]
 println("  Result: $result_value")
 println("  ✓ PythonCalc test passed!" )
@@ -50,7 +50,7 @@ add_connection!(pipeline2, input_val, "value", py_src, "x")
 
 # Execute
 println("  Executing: x = 10; x = x * 2")
-results2 = execute_pipeline(pipeline2)
+results2, workflow_exec2 = execute_pipeline(pipeline2)
 if haskey(results2[py_src.id], "result")
     py_result = results2[py_src.id]["result"]
     println("  Result: $py_result")

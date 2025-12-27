@@ -60,7 +60,6 @@ function execute_pipeline(pipeline::Pipeline; enable_logging::Bool=true)
     # Create workflow execution record
     if interp.enable_logging
         interp.workflow_exec = WorkflowExec(
-            machine_id=interp.machine.id,
             parent_version=-1  # Will be set if we have vistrail context
         )
         push!(interp.workflow_exec.machines, interp.machine)
