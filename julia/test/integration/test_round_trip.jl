@@ -8,7 +8,7 @@ This validates the entire production workflow:
 4. Render with auto-layout
 """
 
-include(joinpath(@__DIR__, "src", "VisTrailsJL.jl"))
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
 using .VisTrailsJL
 
 println("="^70)
@@ -17,14 +17,15 @@ println("="^70)
 
 # 1. Load .vt file
 println("\n1. Loading .vt file...")
-vt_path = joinpath(@__DIR__, "..", "examples", "gcd.vt")
+vt_path = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 vt = load_vistrail(vt_path)
 println("   ✓ Loaded: $(vt.name)")
 println("   Versions: $(length(vt.actions))")
 
-# 2. Get a workflow from a specific version
-println("\n2. Getting pipeline from version 22...")
-pipeline_original = get_pipeline(vt, 22)
+# 2. Get a workflow from the current version (134)
+current_version = vt.current_version
+println("\n2. Getting pipeline from version $current_version...")
+pipeline_original = get_pipeline(vt, current_version)
 println("   ✓ Pipeline extracted")
 println("   Modules: $(length(pipeline_original.modules))")
 println("   Connections: $(length(pipeline_original.connections))")
@@ -32,10 +33,8 @@ println("   Connections: $(length(pipeline_original.connections))")
 # 3. Convert to notebook
 println("\n3. Converting to notebook format...")
 output_path = joinpath(@__DIR__, "test_gcd_converted.ipynb")
-notebook = pipeline_to_notebook(vt, 22, output_path=output_path)
+vistrail_workflow_to_notebook(vt_path, current_version, output_path=output_path)
 println("   ✓ Notebook created: $output_path")
-println("   Workflow name: $(notebook.name)")
-println("   Modules: $(length(notebook.modules))")
 
 # 4. Load notebook back
 println("\n4. Loading notebook as workflow...")
