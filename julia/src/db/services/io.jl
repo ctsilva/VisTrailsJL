@@ -174,13 +174,20 @@ function reconstruct_pipeline(root::EzXML.Node, version_id::Int)
         pipeline = replay_actions_to_version(root, version_id)
         println("  ✓ Action replay successful: $(length(pipeline.modules)) modules, $(length(pipeline.connections)) connections")
 
-        # If action replay succeeded but pipeline is too small, fall back to workflow
-        if length(pipeline.modules) < 10
-            println("  Action replay produced small pipeline, trying workflow element...")
-            throw(ErrorException("Pipeline too small, using workflow element"))
+        # Return the pipeline if we got any modules with proper types
+        # (small pipelines are valid - matplotlib examples have only 3 modules!)
+        if !isempty(pipeline.modules)
+            # Check if modules have real types (not Nothing)
+            has_real_types = any(m -> m.descriptor.module_type !== Nothing, values(pipeline.modules))
+            if has_real_types || isempty(pipeline.modules)
+                return pipeline
+            else
+                println("  Action replay produced placeholder modules, trying workflow element...")
+                throw(ErrorException("Modules have no types, using workflow element"))
+            end
         end
 
-        return pipeline
+        throw(ErrorException("Pipeline empty"))
     catch e
         # Try lightweight action replay (for rendering when modules aren't loaded)
         println("  Standard action replay failed, trying lightweight mode for rendering...")
