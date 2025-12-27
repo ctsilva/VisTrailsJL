@@ -190,6 +190,14 @@ Register all modules from a notebook package in the global registry.
 function register_notebook_package!(pkg::NotebookPackage)
     println("Registering notebook package: $(pkg.identifier) v$(pkg.version)")
 
+    # Auto-register package short name (last component of identifier)
+    # e.g., "org.vistrails.vistrails.branching" → "branching"
+    parts = split(pkg.identifier, ".")
+    if length(parts) > 0
+        short_name = String(parts[end])
+        register_package_short_name!(short_name, pkg.identifier)
+    end
+
     for (name, descriptor, compute_fn) in pkg.modules
         # Store the compute function for lookup during execution
         NOTEBOOK_COMPUTE_FUNCTIONS[(pkg.identifier, name)] = compute_fn

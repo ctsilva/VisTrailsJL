@@ -190,6 +190,16 @@ const PACKAGE_SHORT_NAMES = Dict(
 )
 
 """
+    register_package_short_name!(short_name::String, full_identifier::String)
+
+Register a short name for a package identifier.
+Automatically called by register_notebook_package!().
+"""
+function register_package_short_name!(short_name::String, full_identifier::String)
+    PACKAGE_SHORT_NAMES[short_name] = full_identifier
+end
+
+"""
     parse_module_type_ref(type_str::AbstractString) -> (package, name)
 
 Parse a module type reference like "basic:Integer" into (full_package, name).
@@ -253,6 +263,17 @@ function build_pipeline_from_workflow(workflow::NotebookWorkflow)
         # Set parameters
         for (param_name, param_value) in nb_mod.params
             set_parameter!(mod, param_name, param_value)
+        end
+
+        # For JuliaSource modules, extract code from cell (lines that don't start with #|)
+        if name == "JuliaSource" && !isempty(nb_mod.code)
+            # Filter out directive lines (lines starting with #|)
+            code_lines = filter(line -> !startswith(strip(line), "#|"), split(nb_mod.code, "\n"))
+            julia_code = strip(join(code_lines, "\n"))
+
+            if !isempty(julia_code)
+                set_parameter!(mod, "source", julia_code)
+            end
         end
 
         id_to_module[nb_mod.id] = mod
