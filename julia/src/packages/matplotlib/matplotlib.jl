@@ -164,6 +164,11 @@ function compute(self::ModuleInstance, ::Type{MplScatter})
     color = haskey(self.inputs, "color") ? get(self.inputs, "color", nothing) : nothing
     label_text = haskey(self.inputs, "label") ? get(self.inputs, "label", nothing) : nothing
 
+    # Add support for 's' parameter (marker size in points²)
+    # In matplotlib, s is the marker area in points²
+    # In Plots.jl, markersize is the marker radius/size
+    s = haskey(self.inputs, "s") ? get(self.inputs, "s", nothing) : nothing
+
     plot_fn = function(figure)
         kwargs = Dict{Symbol, Any}(:marker => marker, :seriestype => :scatter)
         if color !== nothing
@@ -171,6 +176,23 @@ function compute(self::ModuleInstance, ::Type{MplScatter})
         end
         if label_text !== nothing
             kwargs[:label] = label_text
+        end
+
+        # Handle marker size
+        if s !== nothing
+            # Convert matplotlib s (area in points²) to Plots.jl markersize
+            # matplotlib: s is area, so radius = sqrt(s/π)
+            # Plots.jl markersize is roughly the radius in points
+            # Scale factor to make sizes reasonable
+            if s isa AbstractArray
+                # Array of sizes - convert each
+                markersize = [sqrt(si / π) * 0.5 for si in s]
+                kwargs[:markersize] = markersize
+            else
+                # Scalar size
+                markersize = sqrt(s / π) * 0.5
+                kwargs[:markersize] = markersize
+            end
         end
 
         Plots.plot!(figure, x, y; kwargs...)
@@ -225,9 +247,13 @@ struct MplHist
 end
 
 function compute(self::ModuleInstance, ::Type{MplHist})
-    x = get(self.inputs, "x", nothing)
+    # Check inputs first, then parameters (like MplLinePlot)
+    x_raw = haskey(self.inputs, "x") ? get(self.inputs, "x", nothing) :
+            haskey(self.parameters, "x") ? get(self.parameters, "x", nothing) : nothing
+    x = parse_param_value(x_raw)
 
-    bins = haskey(self.inputs, "bins") ? get(self.inputs, "bins", nothing) : :auto
+    bins = haskey(self.inputs, "bins") ? get(self.inputs, "bins", nothing) :
+           haskey(self.parameters, "bins") ? parse_param_value(get(self.parameters, "bins", nothing)) : :auto
     color = haskey(self.inputs, "color") ? get(self.inputs, "color", nothing) : nothing
     label_text = haskey(self.inputs, "label") ? get(self.inputs, "label", nothing) : nothing
 

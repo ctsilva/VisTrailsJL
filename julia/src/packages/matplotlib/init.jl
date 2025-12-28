@@ -60,6 +60,7 @@ function register_mplscatter!()
         [
             InputPort("x", Vector),
             InputPort("y", Vector),
+            InputPort("s", Any, optional=true),  # Marker size (scalar or array)
             InputPort("marker", String, optional=true),
             InputPort("color", String, optional=true),
             InputPort("label", String, optional=true)
