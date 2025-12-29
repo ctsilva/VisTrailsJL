@@ -45,8 +45,11 @@ include("packages/matplotlib/init.jl")
 # Notebook support
 include("notebook/init.jl")
 
+# High-level API
+include("api/api.jl")
+
 # Exports
-export load_vistrail, execute_pipeline
+export load_vistrail, load_vistrail_internal, execute_pipeline, execute
 export Vistrail, Pipeline, ModuleInstance, Connection
 export add_module!, add_connection!, set_parameter!
 export print_vistrail_info, print_pipeline_info
@@ -54,6 +57,13 @@ export get_pipeline
 export render_pipeline_svg, save_pipeline_svg
 export render_version_tree_svg, save_version_tree_svg
 export auto_layout_pipeline!, ensure_layout!, has_layout_positions
+
+# High-level API exports
+export VistrailWrapper, PipelineWrapper, ExecutionResult
+export load_workflow, load_package
+export select_version!, select_latest_version!
+export output_port, module_output
+export get_input, get_module
 
 # Notebook exports
 export parse_notebook, NotebookCell, get_directive, has_directive

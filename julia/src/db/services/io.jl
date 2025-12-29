@@ -65,11 +65,11 @@ function load_vt_xml(filename::String)
 end
 
 """
-    load_vistrail(filename::String) -> Vistrail
+    load_vistrail_internal(filename::String) -> Vistrail
 
-Load a complete vistrail from a .vt file.
+Load a complete vistrail from a .vt file (internal function).
 """
-function load_vistrail(filename::String; version::Union{Int,Nothing}=nothing)
+function load_vistrail_internal(filename::String; version::Union{Int,Nothing}=nothing)
     root = load_vt_xml(filename)
 
     # Create vistrail object
