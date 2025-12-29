@@ -58,7 +58,14 @@
 - **Output Extraction**:
   - `output_port(result, name)` - Get OutputPort values
   - `module_output(result, id/name, port)` - Get any module output
-- **Compatibility**: Similar to Python VisTrails API (examples/api/ipython-notebook.ipynb)
+- **Python API Compatibility**: ~75% compatible with vistrails.core.api
+  - See detailed comparison: `julia/docs/API_COMPARISON.md`
+  - Core workflow execution: ✅ Fully compatible
+  - Version navigation: ✅ Compatible (numeric IDs)
+  - Output extraction: ✅ Compatible
+  - Module binding syntax: 🔄 Simplified (kwargs only)
+  - Tag management: 🔄 Tags loaded, not settable yet
+  - IPython integration: ❌ Different ecosystem (Pluto/IJulia)
 - **Testing**: Comprehensive test suite in test/api/test_api.jl
 - **Example**: Interactive demo in examples/api/julia_api_demo.ipynb
 
