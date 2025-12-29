@@ -300,6 +300,318 @@ SVG XML content with version tree visualization.
 
 ---
 
+## Workflow Editing Endpoints
+
+The following endpoints enable real-time workflow editing for visflow-lite integration. These endpoints maintain in-memory workflow sessions and support adding, modifying, and deleting modules and connections.
+
+### Get Workflow Editing State
+
+**GET** `/api/workflow/:id/state`
+
+Returns the current editing state for a workflow, including all modules, connections, and metadata.
+
+**Parameters:**
+- `:id` - Workflow ID
+
+**Example:**
+```bash
+curl http://localhost:8000/api/workflow/gcd/state | jq .
+```
+
+**Response:**
+```json
+{
+  "workflow_id": "gcd",
+  "current_version": 134,
+  "modified": true,
+  "last_saved": "2024-01-15T10:30:00",
+  "module_count": 22,
+  "connection_count": 31,
+  "modules": [
+    {
+      "id": 1,
+      "name": "Integer",
+      "package": "org.vistrails.vistrails.basic",
+      "position": {"x": 100.0, "y": 100.0},
+      "parameters": {"value": 42}
+    }
+  ],
+  "connections": [
+    {
+      "id": 1,
+      "source_module_id": 1,
+      "source_port": "value",
+      "dest_module_id": 2,
+      "dest_port": "value1"
+    }
+  ]
+}
+```
+
+---
+
+### Add Module
+
+**POST** `/api/workflow/:id/module`
+
+Adds a new module to the workflow at the specified position.
+
+**Parameters:**
+- `:id` - Workflow ID
+
+**Request Body:**
+```json
+{
+  "type": "basic:Integer",
+  "position": {
+    "x": 100.0,
+    "y": 100.0
+  },
+  "parameters": {
+    "value": 42
+  }
+}
+```
+
+**Module Types** (format: `package:name` or `package::name`):
+
+**Basic Modules:**
+- `basic:Integer`, `basic:Float`, `basic:String`, `basic:Boolean`
+- `basic:HTTPFile`, `basic:PythonSource`
+- `basic:InputPort`, `basic:OutputPort`, `basic:StandardOutput`
+- `basic:Tuple`, `basic:Untuple`, `basic:List`, `basic:Round`
+
+**Julia:**
+- `julia:JuliaSource`
+
+**Python Calculator:**
+- `pythoncalc:PythonCalc`
+
+**Control Flow:**
+- `control_flow:If`, `control_flow:While`
+- `control_flow:And`, `control_flow:Or`, `control_flow:Not`
+
+**Vector Operations:**
+- `control_flow:Sum`, `control_flow:Cross`, `control_flow:Dot`, `control_flow:ElementwiseProduct`
+
+**Matplotlib:**
+- `matplotlib:MplFigure`, `matplotlib:MplFigureOutput`
+- `matplotlib:MplLinePlot`, `matplotlib:MplScatter`, `matplotlib:MplBar`, `matplotlib:MplHist`
+
+**Example:**
+```bash
+curl -X POST http://localhost:8000/api/workflow/gcd/module \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "basic:Integer",
+    "position": {"x": 100, "y": 100},
+    "parameters": {"value": 42}
+  }'
+```
+
+**Response:**
+```json
+{
+  "module_id": 1,
+  "descriptor": {
+    "name": "Integer",
+    "package": "org.vistrails.vistrails.basic",
+    "input_ports": [],
+    "output_ports": [
+      {"name": "value", "type": "Int64"}
+    ]
+  },
+  "position": {"x": 100.0, "y": 100.0},
+  "parameters": {"value": 42}
+}
+```
+
+---
+
+### Update Module Position
+
+**PATCH** `/api/workflow/:id/module/:module_id/position`
+
+Updates the position of a module on the canvas (e.g., when dragged in the UI).
+
+**Parameters:**
+- `:id` - Workflow ID
+- `:module_id` - Module ID (integer)
+
+**Request Body:**
+```json
+{
+  "x": 150.0,
+  "y": 120.0
+}
+```
+
+**Example:**
+```bash
+curl -X PATCH http://localhost:8000/api/workflow/gcd/module/1/position \
+  -H "Content-Type: application/json" \
+  -d '{"x": 150, "y": 120}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "module_id": 1,
+  "position": {"x": 150.0, "y": 120.0}
+}
+```
+
+---
+
+### Update Module Parameters
+
+**PATCH** `/api/workflow/:id/module/:module_id/parameters`
+
+Updates the parameters of a module.
+
+**Parameters:**
+- `:id` - Workflow ID
+- `:module_id` - Module ID (integer)
+
+**Request Body:**
+```json
+{
+  "value": 100,
+  "other_param": "some value"
+}
+```
+
+**Example:**
+```bash
+curl -X PATCH http://localhost:8000/api/workflow/gcd/module/1/parameters \
+  -H "Content-Type: application/json" \
+  -d '{"value": 100}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "module_id": 1,
+  "parameters": {
+    "value": 100
+  }
+}
+```
+
+---
+
+### Delete Module
+
+**DELETE** `/api/workflow/:id/module/:module_id`
+
+Deletes a module from the workflow. All connections to/from this module are automatically removed (cascade delete).
+
+**Parameters:**
+- `:id` - Workflow ID
+- `:module_id` - Module ID (integer)
+
+**Example:**
+```bash
+curl -X DELETE http://localhost:8000/api/workflow/gcd/module/1
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "module_id": 1,
+  "removed_connections": [1, 2, 3]
+}
+```
+
+---
+
+### Add Connection
+
+**POST** `/api/workflow/:id/connection`
+
+Creates a connection between two modules. The backend validates that the source and destination port types are compatible.
+
+**Parameters:**
+- `:id` - Workflow ID
+
+**Request Body:**
+```json
+{
+  "source_module_id": 1,
+  "source_port": "value",
+  "dest_module_id": 2,
+  "dest_port": "value1"
+}
+```
+
+**Type Validation Rules:**
+- Exact type match (Int64 → Int64) ✅
+- Numeric conversions (Int64 → Float64) ✅
+- String types (String → String) ✅
+- Subtype relationships ✅
+- Universal `Any` type ✅
+- Incompatible types (Int64 → String) ❌
+
+**Example:**
+```bash
+curl -X POST http://localhost:8000/api/workflow/gcd/connection \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_module_id": 1,
+    "source_port": "value",
+    "dest_module_id": 2,
+    "dest_port": "value1"
+  }'
+```
+
+**Success Response:**
+```json
+{
+  "connection_id": 1,
+  "source_module_id": 1,
+  "source_port": "value",
+  "dest_module_id": 2,
+  "dest_port": "value1"
+}
+```
+
+**Error Response** (type mismatch):
+```json
+{
+  "error": "Type mismatch: Cannot connect String to Int64"
+}
+```
+
+---
+
+### Delete Connection
+
+**DELETE** `/api/workflow/:id/connection/:connection_id`
+
+Deletes a connection between modules.
+
+**Parameters:**
+- `:id` - Workflow ID
+- `:connection_id` - Connection ID (integer)
+
+**Example:**
+```bash
+curl -X DELETE http://localhost:8000/api/workflow/gcd/connection/1
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "connection_id": 1
+}
+```
+
+---
+
 ## Embedding in HTML
 
 All SVG endpoints return properly formatted SVG that can be embedded directly:
@@ -468,6 +780,41 @@ open /tmp/gcd_tree.svg
 # 10. Open demos
 open http://localhost:8000/demo
 open http://localhost:8000/tree-demo
+
+# 11. Test workflow editing - Get state
+curl http://localhost:8000/api/workflow/gcd/state | jq '.module_count, .connection_count'
+
+# 12. Add a module
+curl -X POST http://localhost:8000/api/workflow/gcd/module \
+  -H "Content-Type: application/json" \
+  -d '{"type":"basic:Integer","position":{"x":100,"y":100},"parameters":{"value":42}}' \
+  | jq '.module_id'
+
+# 13. Move the module
+curl -X PATCH http://localhost:8000/api/workflow/gcd/module/1/position \
+  -H "Content-Type: application/json" \
+  -d '{"x":150,"y":120}' \
+  | jq '.position'
+
+# 14. Update module parameters
+curl -X PATCH http://localhost:8000/api/workflow/gcd/module/1/parameters \
+  -H "Content-Type: application/json" \
+  -d '{"value":100}' \
+  | jq '.parameters'
+
+# 15. Add a connection
+curl -X POST http://localhost:8000/api/workflow/gcd/connection \
+  -H "Content-Type: application/json" \
+  -d '{"source_module_id":1,"source_port":"value","dest_module_id":2,"dest_port":"value1"}' \
+  | jq '.connection_id'
+
+# 16. Delete a connection
+curl -X DELETE http://localhost:8000/api/workflow/gcd/connection/1 \
+  | jq '.success'
+
+# 17. Delete a module
+curl -X DELETE http://localhost:8000/api/workflow/gcd/module/1 \
+  | jq '.removed_connections'
 ```
 
 ---
@@ -507,8 +854,44 @@ cd julia/backend && ./start.sh
 
 ---
 
+## Complete Endpoint Summary
+
+**Total: 17 endpoints** (10 read-only + 7 write operations)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| **Health & Status** |
+| GET | `/health` | Health check |
+| **Workflow List** |
+| GET | `/api/workflows` | List all workflows |
+| **Workflow Data (Read-Only)** |
+| GET | `/api/workflow/:id` | Get workflow JSON (latest version) |
+| GET | `/api/workflow/:id/version/:version_id` | Get workflow JSON (specific version) |
+| GET | `/api/workflow/:id/svg` | Get workflow SVG (latest version) |
+| GET | `/api/workflow/:id/version/:version_id/svg` | Get workflow SVG (specific version) |
+| **Version Tree** |
+| GET | `/api/workflow/:id/versions` | Get version tree metadata as JSON |
+| GET | `/api/workflow/:id/tree/svg` | Get version tree as SVG |
+| **Workflow Editing** |
+| GET | `/api/workflow/:id/state` | Get current editing state |
+| POST | `/api/workflow/:id/module` | Add module to workflow |
+| PATCH | `/api/workflow/:id/module/:module_id/position` | Update module position |
+| PATCH | `/api/workflow/:id/module/:module_id/parameters` | Update module parameters |
+| DELETE | `/api/workflow/:id/module/:module_id` | Delete module (cascade deletes connections) |
+| POST | `/api/workflow/:id/connection` | Add connection between modules |
+| DELETE | `/api/workflow/:id/connection/:connection_id` | Delete connection |
+| **HTML Pages** |
+| GET | `/` | Main index page |
+| GET | `/demo` | Workflow visualization demo |
+| GET | `/tree-demo` | Version tree visualization demo |
+
+---
+
 ## See Also
 
 - [README.md](README.md) - Quick start guide
 - [SVG_API_SUMMARY.md](SVG_API_SUMMARY.md) - SVG endpoint details
 - [../docs/RENDERING.md](../docs/RENDERING.md) - Rendering implementation details
+- [../docs/WORKFLOW_EDITING_API.md](../docs/WORKFLOW_EDITING_API.md) - Workflow editing API design
+- [../docs/WORKFLOW_EDITING_COMPLETE.md](../docs/WORKFLOW_EDITING_COMPLETE.md) - Editing implementation status
+- [../docs/API_ENDPOINTS.md](../docs/API_ENDPOINTS.md) - Complete API endpoint reference

@@ -1,12 +1,18 @@
+# Load VisTrailsJL from parent project FIRST
+import Pkg
+Pkg.activate(joinpath(@__DIR__, ".."))
+using VisTrailsJL
+
+# Now load other dependencies
 using Genie.Router
 using Genie.Requests
 using Genie.Renderer.Json
 using HTTP
+using JSON3
+using Dates
 
-# Load VisTrailsJL from parent project
-import Pkg
-Pkg.activate(joinpath(@__DIR__, ".."))
-using VisTrailsJL
+# Load workflow editing operations
+include("workflow_editing.jl")
 
 # Health check
 route("/health") do
@@ -293,4 +299,183 @@ function pipeline_to_json(pipeline::VisTrailsJL.Pipeline, vistrail::VisTrailsJL.
     )
 
     return result
+end
+
+# ============================================================================
+# Workflow Editing Routes (for visflow-lite integration)
+# ============================================================================
+
+# Add module to workflow
+# POST /api/workflow/:id/module
+route("/api/workflow/:id/module", method = POST) do
+    try
+        workflow_id = payload(:id)
+
+        # Parse request body
+        body = JSON3.read(rawpayload())
+
+        module_type = body.type
+        position = (Float64(body.position.x), Float64(body.position.y))
+        parameters = haskey(body, :parameters) ? Dict(body.parameters) : Dict()
+
+        # Get or create session
+        vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+        if !isfile(vt_file)
+            return json(Dict("error" => "Workflow not found"), status=404)
+        end
+
+        session = get_or_create_session(workflow_id, vt_file)
+
+        # Add module
+        module_id, mod = add_module!(session, module_type, position, parameters)
+
+        # Return module info
+        json(Dict(
+            "module_id" => module_id,
+            "descriptor" => Dict(
+                "name" => mod.descriptor.name,
+                "package" => mod.descriptor.package,
+                "input_ports" => map(p -> Dict("name" => p.name, "type" => string(p.type)), mod.descriptor.input_ports),
+                "output_ports" => map(p -> Dict("name" => p.name, "type" => string(p.type)), mod.descriptor.output_ports)
+            ),
+            "position" => Dict("x" => position[1], "y" => position[2]),
+            "parameters" => parameters
+        ))
+    catch e
+        @error "Error adding module" exception=(e, catch_backtrace())
+        json(Dict("error" => string(e)), status=500)
+    end
+end
+
+# Update module position
+# PATCH /api/workflow/:id/module/:module_id/position
+route("/api/workflow/:id/module/:module_id/position", method = PATCH) do
+    try
+        workflow_id = payload(:id)
+        module_id = parse(Int, payload(:module_id))
+
+        body = JSON3.read(rawpayload())
+        position = (Float64(body.x), Float64(body.y))
+
+        vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+        session = get_or_create_session(workflow_id, vt_file)
+
+        update_module_position!(session, module_id, position)
+
+        json(Dict("success" => true, "module_id" => module_id, "position" => Dict("x" => position[1], "y" => position[2])))
+    catch e
+        @error "Error updating module position" exception=(e, catch_backtrace())
+        json(Dict("error" => string(e)), status=500)
+    end
+end
+
+# Update module parameters
+# PATCH /api/workflow/:id/module/:module_id/parameters
+route("/api/workflow/:id/module/:module_id/parameters", method = PATCH) do
+    try
+        workflow_id = payload(:id)
+        module_id = parse(Int, payload(:module_id))
+
+        body = JSON3.read(rawpayload())
+        parameters = Dict(body)
+
+        vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+        session = get_or_create_session(workflow_id, vt_file)
+
+        update_module_parameters!(session, module_id, parameters)
+
+        json(Dict("success" => true, "module_id" => module_id, "parameters" => parameters))
+    catch e
+        @error "Error updating module parameters" exception=(e, catch_backtrace())
+        json(Dict("error" => string(e)), status=500)
+    end
+end
+
+# Delete module
+# DELETE /api/workflow/:id/module/:module_id
+route("/api/workflow/:id/module/:module_id", method = DELETE) do
+    try
+        workflow_id = payload(:id)
+        module_id = parse(Int, payload(:module_id))
+
+        vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+        session = get_or_create_session(workflow_id, vt_file)
+
+        removed_connections = delete_module!(session, module_id)
+
+        json(Dict("success" => true, "module_id" => module_id, "removed_connections" => removed_connections))
+    catch e
+        @error "Error deleting module" exception=(e, catch_backtrace())
+        json(Dict("error" => string(e)), status=500)
+    end
+end
+
+# Add connection
+# POST /api/workflow/:id/connection
+route("/api/workflow/:id/connection", method = POST) do
+    try
+        workflow_id = payload(:id)
+
+        body = JSON3.read(rawpayload())
+        source_id = Int(body.source_module_id)
+        source_port = String(body.source_port)
+        dest_id = Int(body.dest_module_id)
+        dest_port = String(body.dest_port)
+
+        vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+        session = get_or_create_session(workflow_id, vt_file)
+
+        conn_id, conn = add_connection!(session, source_id, source_port, dest_id, dest_port)
+
+        json(Dict(
+            "connection_id" => conn_id,
+            "source_module_id" => source_id,
+            "source_port" => source_port,
+            "dest_module_id" => dest_id,
+            "dest_port" => dest_port
+        ))
+    catch e
+        @error "Error adding connection" exception=(e, catch_backtrace())
+        json(Dict("error" => string(e)), status=500)
+    end
+end
+
+# Delete connection
+# DELETE /api/workflow/:id/connection/:connection_id
+route("/api/workflow/:id/connection/:connection_id", method = DELETE) do
+    try
+        workflow_id = payload(:id)
+        connection_id = parse(Int, payload(:connection_id))
+
+        vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+        session = get_or_create_session(workflow_id, vt_file)
+
+        delete_connection!(session, connection_id)
+
+        json(Dict("success" => true, "connection_id" => connection_id))
+    catch e
+        @error "Error deleting connection" exception=(e, catch_backtrace())
+        json(Dict("error" => string(e)), status=500)
+    end
+end
+
+# Get workflow state (for debugging/status)
+# GET /api/workflow/:id/state
+route("/api/workflow/:id/state", method = GET) do
+    try
+        workflow_id = payload(:id)
+
+        vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+        if !isfile(vt_file)
+            return json(Dict("error" => "Workflow not found"), status=404)
+        end
+
+        session = get_or_create_session(workflow_id, vt_file)
+        state = get_workflow_state(session)
+
+        json(state)
+    catch e
+        @error "Error getting workflow state" exception=(e, catch_backtrace())
+        json(Dict("error" => string(e)), status=500)
+    end
 end
