@@ -103,7 +103,7 @@ route("/api/workflows", method = GET) do
             )
         end
 
-        json(Dict("workflows" => workflows, "count" => length(workflows)))
+        json(workflows)
     catch e
         @error "Error listing workflows" exception=(e, catch_backtrace())
         json(Dict("error" => "Internal server error", "message" => string(e)), status = 500)
@@ -210,7 +210,8 @@ route("/api/workflow/:id/versions", method = GET) do
             return json(Dict("error" => "Workflow not found"), status = 404)
         end
 
-        vistrail = VisTrailsJL.load_vistrail(vt_file)
+        vt_wrapper = VisTrailsJL.load_vistrail(vt_file)
+        vistrail = vt_wrapper.vistrail
 
         # Build version tree with all actions
         versions = map(collect(vistrail.actions)) do (version_id, action)
@@ -254,10 +255,11 @@ route("/api/workflow/:id/tree/svg", method = GET) do
             return json(Dict("error" => "Workflow not found"), status = 404)
         end
 
-        vistrail = VisTrailsJL.load_vistrail(vt_file)
+        vt_wrapper = VisTrailsJL.load_vistrail(vt_file)
 
         # Generate SVG using VisTrailsJL's version tree renderer
-        svg_content = VisTrailsJL.render_version_tree_svg(vistrail)
+        # render_version_tree_svg expects a raw Vistrail, not a VistrailWrapper
+        svg_content = VisTrailsJL.render_version_tree_svg(vt_wrapper.vistrail)
 
         # Return SVG with proper content type
         return Genie.Renderer.respond(svg_content, :svg)

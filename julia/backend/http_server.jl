@@ -149,7 +149,8 @@ HTTP.register!(router, "GET", "/api/workflow/*/json", req -> begin
             return json_response(Dict("error" => "Workflow not found", "id" => workflow_id), status=404)
         end
 
-        vistrail = VisTrailsJL.load_vistrail(vt_file)
+        vistrail = VisTrailsJL.load_vistrail_internal(vt_file)
+        
 
         # Get current version pipeline
         current_version = vistrail.current_version
@@ -180,7 +181,8 @@ HTTP.register!(router, "GET", "/api/workflow/*", req -> begin
             return json_response(Dict("error" => "Workflow not found", "id" => workflow_id), status=404)
         end
 
-        vistrail = VisTrailsJL.load_vistrail(vt_file)
+        vistrail = VisTrailsJL.load_vistrail_internal(vt_file)
+        
 
         # Get version information
         versions = map(collect(vistrail.actions)) do (version_id, action)
@@ -212,12 +214,58 @@ HTTP.register!(router, "GET", "/api/workflow/*/tree/svg", req -> begin
             return json_response(Dict("error" => "Workflow not found"), status=404)
         end
 
-        vistrail = VisTrailsJL.load_vistrail(vt_file)
+        vistrail = VisTrailsJL.load_vistrail_internal(vt_file)
         svg_content = VisTrailsJL.render_version_tree_svg(vistrail)
 
         svg_response(svg_content)
     catch e
         @error "Error generating version tree SVG" exception=(e, catch_backtrace())
+        json_response(Dict("error" => "Internal server error", "message" => string(e)), status=500)
+    end
+end)
+
+# Get version tree metadata (versions and tags)
+HTTP.register!(router, "GET", "/api/workflow/*/versions", req -> begin
+    try
+        path_parts = split(HTTP.URIs.unescapeuri(req.target), "/")
+        workflow_id = path_parts[4]  # /api/workflow/:id/versions
+
+        vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+
+        if !isfile(vt_file)
+            return json_response(Dict("error" => "Workflow not found"), status=404)
+        end
+
+        vistrail = VisTrailsJL.load_vistrail_internal(vt_file)
+        
+
+        # Build version tree with all actions
+        versions = map(collect(vistrail.actions)) do (version_id, action)
+            Dict(
+                "id" => version_id,
+                "parent" => action.prev_id,
+                "timestamp" => action.timestamp,
+                "user" => action.user,
+                "notes" => action.notes
+            )
+        end
+
+        # Build tags list
+        tags = map(vistrail.tags) do tag
+            Dict(
+                "name" => tag.name,
+                "version_id" => tag.version_id
+            )
+        end
+
+        json_response(Dict(
+            "versions" => versions,
+            "tags" => tags,
+            "current_version" => vistrail.current_version,
+            "count" => length(versions)
+        ))
+    catch e
+        @error "Error getting versions" exception=(e, catch_backtrace())
         json_response(Dict("error" => "Internal server error", "message" => string(e)), status=500)
     end
 end)
@@ -235,7 +283,8 @@ HTTP.register!(router, "GET", "/api/workflow/*/version/*/json", req -> begin
             return json_response(Dict("error" => "Workflow not found"), status=404)
         end
 
-        vistrail = VisTrailsJL.load_vistrail(vt_file, version=version_id)
+        vistrail = VisTrailsJL.load_vistrail_internal(vt_file, version=version_id)
+        
 
         if haskey(vistrail.pipelines, version_id)
             pipeline = vistrail.pipelines[version_id]
@@ -263,7 +312,8 @@ HTTP.register!(router, "GET", "/api/workflow/*/version/*/svg", req -> begin
             return json_response(Dict("error" => "Workflow not found"), status=404)
         end
 
-        vistrail = VisTrailsJL.load_vistrail(vt_file, version=version_id)
+        vistrail = VisTrailsJL.load_vistrail_internal(vt_file, version=version_id)
+        
 
         if haskey(vistrail.pipelines, version_id)
             pipeline = vistrail.pipelines[version_id]
