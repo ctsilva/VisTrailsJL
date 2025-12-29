@@ -36,6 +36,11 @@
   - `execute_notebook_pipeline(..., save_outputs=true)`
   - Clears outputs before execution, saves after each module
   - Results persist in notebook JSON (Jupyter-compatible format)
+- **Image Output Support**: Plots automatically embedded as PNG
+  - Detects Plots.jl objects in module outputs
+  - Renders to PNG, base64 encodes, adds as image/png
+  - Works with matplotlib examples (lineplot_ex3_converted.ipynb)
+  - Embedded images display properly in Jupyter/VSCode
 - **Module Introspection**: Query module capabilities
   - `describe_module("datatools:CSVParser")` shows ports, parameters
   - Workflow documentation includes output descriptions
@@ -55,7 +60,7 @@
 - `julia/test/matplotlib/ANALYSIS_REPORT.md` (detailed analysis)
 
 **Notebook System:**
-- `julia/src/notebook/notebook_io.jl` (NEW - incremental saving functions)
+- `julia/src/notebook/notebook_io.jl` (NEW - incremental saving + image support)
 - `julia/src/notebook/workflow_parser.jl` (ENHANCED - save_outputs option)
 - `julia/src/core/modules/module_registry.jl` (NEW - describe_module function)
 - `julia/examples/packages/datatools.ipynb` (NEW - custom package example)
