@@ -1,36 +1,68 @@
 # Next Steps for VisTrailsJL Development
 
-## Current Status (as of 2025-12-27)
+## Current Status (as of 2025-12-28)
 
 ### ✅ Completed in This Session
-- **Matplotlib package implementation** (v0.1) - COMPLETE!
-  - Core modules: MplFigure, MplFigureOutput, MplLinePlot, MplScatter, MplBar, MplHist
-  - **Successfully executes ALL matplotlib examples:**
-    - ✅ `lineplot_ex3.vt` - Line plot (3 modules)
-    - ✅ `hist_ex1.vt` - Histogram (3 modules)
-    - ✅ `scatter.vt` - Scatter plot with variable sizes (4 modules)
-    - ✅ `bar_ex1.vt` - Bar chart (4 modules)
-  - Fixed MplHist to check parameters (not just inputs)
-  - Added 's' parameter to MplScatter for variable marker sizes
-  - Fixed critical action replay bug for small pipelines
-  - Implemented JSON parameter parsing for .vt compatibility
-  - Added "self" output port for Python VisTrails compatibility
 
-- **Automated .vt → Notebook conversion**
-  - Demonstrated `vistrail_workflow_to_notebook()` function works
-  - Created test showing round-trip conversion and execution
-  - Generated example: `lineplot_ex3_converted.ipynb`
+#### 1. Matplotlib Package Implementation (v0.1) - COMPLETE!
+- Core modules: MplFigure, MplFigureOutput, MplLinePlot, MplScatter, MplBar, MplHist
+- **Successfully executes ALL matplotlib examples:**
+  - ✅ `lineplot_ex3.vt` - Line plot (3 modules)
+  - ✅ `hist_ex1.vt` - Histogram (3 modules)
+  - ✅ `scatter.vt` - Scatter plot with variable sizes (4 modules)
+  - ✅ `bar_ex1.vt` - Bar chart (4 modules)
+- Fixed MplHist to check parameters (not just inputs)
+- Added 's' parameter to MplScatter for variable marker sizes
+- Fixed critical action replay bug for small pipelines
+- Implemented JSON parameter parsing for .vt compatibility
+- Added "self" output port for Python VisTrails compatibility
 
-### 📂 Key Files Modified
+#### 2. Automated .vt → Notebook Conversion - COMPLETE!
+- Demonstrated `vistrail_workflow_to_notebook()` function works
+- Created test showing round-trip conversion and execution
+- Generated example: `lineplot_ex3_converted.ipynb`
+
+#### 3. Notebook-Based Workflow System (v0.2) - COMPLETE! 🎉
+- **Package Notebooks**: Define module types with `#|` directives
+  - Created example: `datatools.ipynb` (CSVParser, FilterRows, ComputeStats)
+  - Load with `load_package_from_notebook()`
+  - Register with `register_notebook_package!()`
+- **Workflow Notebooks**: Define workflows with module instances
+  - Created example: `data_analysis.ipynb` (5-step data analysis)
+  - Mixes custom modules with built-in modules
+  - Workflow metadata, module definitions, connections via directives
+  - `#| outputs:` in `#| execute` cell (specifies return values)
+- **Incremental Output Saving**: Execution results saved to notebook
+  - `execute_notebook_pipeline(..., save_outputs=true)`
+  - Clears outputs before execution, saves after each module
+  - Results persist in notebook JSON (Jupyter-compatible format)
+- **Module Introspection**: Query module capabilities
+  - `describe_module("datatools:CSVParser")` shows ports, parameters
+  - Workflow documentation includes output descriptions
+
+#### 4. Design Improvements
+- Moved `#| outputs:` from metadata to execute cell (clearer intent)
+- Added output documentation to all workflow steps
+- Comprehensive testing of notebook system
+
+### 📂 Key Files Created/Modified
+
+**Matplotlib Package:**
 - `julia/src/packages/matplotlib/matplotlib.jl` (290 lines - enhanced)
 - `julia/src/packages/matplotlib/init.jl` (125 lines - added 's' port)
 - `julia/src/db/services/io.jl` (FIXED - action replay for small pipelines)
-- `julia/test/matplotlib/test_lineplot_ex3.jl` (NEW - line plot test)
-- `julia/test/matplotlib/test_hist_ex1.jl` (NEW - histogram test)
-- `julia/test/matplotlib/test_scatter.jl` (NEW - scatter test)
-- `julia/test/matplotlib/test_bar_ex1.jl` (NEW - bar chart test)
-- `julia/test/matplotlib/test_notebook_conversion.jl` (NEW - conversion test)
-- `julia/test/matplotlib/ANALYSIS_REPORT.md` (NEW - detailed analysis)
+- `julia/test/matplotlib/test_*.jl` (5 test files for each example)
+- `julia/test/matplotlib/ANALYSIS_REPORT.md` (detailed analysis)
+
+**Notebook System:**
+- `julia/src/notebook/notebook_io.jl` (NEW - incremental saving functions)
+- `julia/src/notebook/workflow_parser.jl` (ENHANCED - save_outputs option)
+- `julia/src/core/modules/module_registry.jl` (NEW - describe_module function)
+- `julia/examples/packages/datatools.ipynb` (NEW - custom package example)
+- `julia/examples/workflows/data_analysis.ipynb` (NEW - workflow example)
+- `julia/test/notebook/test_package_notebook.jl` (NEW - package loading test)
+- `julia/test/notebook/test_workflow_with_custom_package.jl` (NEW - end-to-end test)
+- `julia/test/notebook/test_describe_module.jl` (NEW - introspection test)
 
 ## Recommended Next Steps
 

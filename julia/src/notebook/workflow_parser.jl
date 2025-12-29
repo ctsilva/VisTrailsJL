@@ -71,15 +71,15 @@ function parse_workflow_notebook(path::String)
             push!(modules, mod)
         end
 
-        # Check for outputs specification
-        if has_directive(cell, "outputs")
-            outputs_raw = get_directive(cell, "outputs")
-            outputs = parse_workflow_outputs(outputs_raw)
-        end
-
-        # Check for execute directive
+        # Check for execute directive (and outputs specification)
         if has_directive(cell, "execute")
             execute = true
+
+            # Parse outputs from the execute cell
+            if has_directive(cell, "outputs")
+                outputs_raw = get_directive(cell, "outputs")
+                outputs = parse_workflow_outputs(outputs_raw)
+            end
         end
     end
 
@@ -301,18 +301,40 @@ function build_pipeline_from_workflow(workflow::NotebookWorkflow)
 end
 
 """
-    execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflow; id_to_module=nothing, enable_logging::Bool=false) -> (Dict{Int, Dict{String, Any}}, Dict{String, Any})
+    execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflow;
+                              id_to_module=nothing, enable_logging::Bool=false,
+                              notebook_path::Union{String,Nothing}=nothing,
+                              save_outputs::Bool=false)
+        -> (Dict{Int, Dict{String, Any}}, Dict{String, Any})
 
 Execute a pipeline that may contain notebook-defined modules.
 Uses notebook compute functions for modules defined in notebooks,
 falls back to standard compute for built-in modules.
 
+Options:
+- `notebook_path`: Path to the workflow notebook (required if save_outputs=true)
+- `save_outputs`: If true, save execution results back to the notebook incrementally
+
 Returns:
 - cache: Full execution cache (all module outputs)
 - workflow_outputs: Named outputs specified in workflow.outputs
 """
-function execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflow; id_to_module=nothing, enable_logging::Bool=false)
+function execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflow;
+                                   id_to_module=nothing, enable_logging::Bool=false,
+                                   notebook_path::Union{String,Nothing}=nothing,
+                                   save_outputs::Bool=false)
     cache = Dict{Int, Dict{String, Any}}()
+
+    # Validate options
+    if save_outputs && notebook_path === nothing
+        error("notebook_path must be provided when save_outputs=true")
+    end
+
+    # Clear outputs if saving (start fresh)
+    if save_outputs && notebook_path !== nothing
+        clear_notebook_outputs(notebook_path)
+        println("Cleared previous outputs from notebook")
+    end
 
     # Get execution order
     execution_order = topological_sort(pipeline)
@@ -320,8 +342,11 @@ function execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflo
     println("Executing pipeline with $(length(pipeline.modules)) modules...")
     println("Execution order: ", execution_order)
 
+    execution_count = 0
+
     for module_id in execution_order
         mod = get_module(pipeline, module_id)
+        execution_count += 1
 
         println("  Module $module_id ($(mod.descriptor.name)): computing...")
 
@@ -351,6 +376,27 @@ function execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflo
         cache[module_id] = outputs
         println("    Outputs: $outputs")
         println("    ✓ Complete")
+
+        # Save outputs to notebook if requested
+        if save_outputs && notebook_path !== nothing && id_to_module !== nothing
+            # Find the notebook module ID for this pipeline module
+            nb_module_id = nothing
+            for (nb_id, pipeline_mod) in id_to_module
+                if pipeline_mod.id == module_id
+                    nb_module_id = nb_id
+                    break
+                end
+            end
+
+            if nb_module_id !== nothing
+                try
+                    update_notebook_with_execution(notebook_path, nb_module_id, outputs, execution_count)
+                    println("    💾 Saved outputs to notebook")
+                catch e
+                    @warn "Failed to save outputs for module $nb_module_id: $e"
+                end
+            end
+        end
     end
 
     # Extract workflow outputs

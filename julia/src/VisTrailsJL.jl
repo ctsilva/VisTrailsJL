@@ -62,7 +62,7 @@ export parse_workflow_notebook, build_pipeline_from_workflow, execute_notebook_p
 export NotebookWorkflow, NotebookModuleDef
 
 # Module registry exports
-export module_exists, get_module_descriptor, list_modules
+export module_exists, get_module_descriptor, list_modules, describe_module
 
 # Conversion exports
 export package_to_notebook, save_package_notebook, registered_package_to_notebook
