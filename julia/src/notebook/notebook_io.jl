@@ -5,6 +5,8 @@ Functions for reading/writing Jupyter notebooks and updating cells with executio
 """
 
 using JSON
+using Base64
+using Plots
 
 """
     load_notebook_json(path::String) -> Dict
@@ -73,20 +75,94 @@ function format_output_for_notebook(value)
 end
 
 """
+    render_plot_to_png(plot) -> Vector{UInt8}
+
+Render a Plots.jl plot to PNG format in memory.
+Returns PNG data as bytes.
+"""
+function render_plot_to_png(plot)
+    # Create a temporary file for the PNG
+    tmpfile = tempname() * ".png"
+
+    try
+        # Save plot to temporary file
+        Plots.savefig(plot, tmpfile)
+
+        # Read the PNG data
+        png_data = read(tmpfile)
+
+        return png_data
+    finally
+        # Clean up temporary file
+        if isfile(tmpfile)
+            rm(tmpfile)
+        end
+    end
+end
+
+"""
+    is_plot_object(value) -> Bool
+
+Check if a value is a Plots.jl Plot object.
+"""
+function is_plot_object(value)
+    return isa(value, Plots.Plot)
+end
+
+"""
+    find_plot_in_outputs(outputs::Dict) -> Union{Plots.Plot, Nothing}
+
+Search through outputs dictionary for a Plot object.
+Returns the first Plot found, or nothing.
+"""
+function find_plot_in_outputs(outputs::Dict)
+    for (key, value) in outputs
+        if is_plot_object(value)
+            return value
+        end
+    end
+    return nothing
+end
+
+"""
     create_execute_result(outputs::Dict, execution_count::Int) -> Dict
 
 Create an execute_result output for a notebook cell.
+Automatically detects and includes Plot objects as image/png data.
 """
 function create_execute_result(outputs::Dict, execution_count::Int)
-    # Format the outputs dictionary
+    # Format the outputs dictionary as text
     output_text = format_output_for_notebook(outputs)
+
+    # Create base data dictionary with text representation
+    data = Dict{String, Any}(
+        "text/plain" => output_text
+    )
+
+    # Check if outputs contain a Plot object
+    plot_obj = find_plot_in_outputs(outputs)
+
+    if plot_obj !== nothing
+        try
+            # Render plot to PNG
+            png_bytes = render_plot_to_png(plot_obj)
+
+            # Encode as base64
+            png_base64 = base64encode(png_bytes)
+
+            # Add image data to output
+            data["image/png"] = png_base64
+
+            println("    📊 Added plot image to notebook output")
+        catch e
+            @warn "Failed to render plot to PNG: $e"
+        end
+    end
 
     return Dict(
         "output_type" => "execute_result",
         "execution_count" => execution_count,
-        "data" => Dict(
-            "text/plain" => output_text
-        ),
+        "data" => data,
         "metadata" => Dict()
     )
 end
