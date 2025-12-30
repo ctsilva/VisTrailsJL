@@ -89,20 +89,45 @@ function pipeline_to_json(pipeline, vistrail, version_id)
             (100.0 + (id * 150.0), 100.0)
         end
 
-        # Get ports from descriptor
-        inputs = map(mod.descriptor.input_ports) do p
-            Dict(
-                "name" => p.name,
-                "type" => string(p.type),
-                "optional" => p.optional
-            )
+        # Get ports from instance-specific port_specs (matching SVG renderer logic)
+        # Prefer mod.port_specs over mod.descriptor ports
+        inputs = if !isempty(mod.port_specs)
+            input_specs = filter(ps -> ps.port_type == :input, mod.port_specs)
+            sort!(input_specs, by = ps -> ps.sort_key)
+            map(input_specs) do ps
+                Dict(
+                    "name" => ps.name,
+                    "type" => ps.signature
+                )
+            end
+        else
+            # Fallback to descriptor ports
+            map(mod.descriptor.input_ports) do p
+                Dict(
+                    "name" => p.name,
+                    "type" => string(p.type),
+                    "optional" => p.optional
+                )
+            end
         end
 
-        outputs = map(mod.descriptor.output_ports) do p
-            Dict(
-                "name" => p.name,
-                "type" => string(p.type)
-            )
+        outputs = if !isempty(mod.port_specs)
+            output_specs = filter(ps -> ps.port_type == :output, mod.port_specs)
+            sort!(output_specs, by = ps -> ps.sort_key)
+            map(output_specs) do ps
+                Dict(
+                    "name" => ps.name,
+                    "type" => ps.signature
+                )
+            end
+        else
+            # Fallback to descriptor ports
+            map(mod.descriptor.output_ports) do p
+                Dict(
+                    "name" => p.name,
+                    "type" => string(p.type)
+                )
+            end
         end
 
         Dict(
