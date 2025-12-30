@@ -19,21 +19,42 @@ include("workflow_editing.jl")
 # Create router
 router = HTTP.Router()
 
+# CORS headers for all responses
+const CORS_HEADERS = [
+    "Access-Control-Allow-Origin" => "*",
+    "Access-Control-Allow-Methods" => "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers" => "Content-Type, Authorization"
+]
+
 # Helper to create JSON response
 json_response(data; status=200) = HTTP.Response(
     status,
-    ["Content-Type" => "application/json",
-     "Access-Control-Allow-Origin" => "*"],
+    ["Content-Type" => "application/json"; CORS_HEADERS...],
     JSON3.write(data)
 )
+
+# CORS preflight handler
+cors_preflight(req) = HTTP.Response(204, CORS_HEADERS)
 
 # Helper to create SVG response
 svg_response(svg_content) = HTTP.Response(
     200,
-    ["Content-Type" => "image/svg+xml",
-     "Access-Control-Allow-Origin" => "*"],
+    ["Content-Type" => "image/svg+xml"; CORS_HEADERS...],
     svg_content
 )
+
+# Register OPTIONS handlers for CORS preflight
+HTTP.register!(router, "OPTIONS", "/api/modules", cors_preflight)
+HTTP.register!(router, "OPTIONS", "/api/workflows", cors_preflight)
+HTTP.register!(router, "OPTIONS", "/api/workflow/*", cors_preflight)
+HTTP.register!(router, "OPTIONS", "/api/workflow/*/module", cors_preflight)
+HTTP.register!(router, "OPTIONS", "/api/workflow/*/module/*", cors_preflight)
+HTTP.register!(router, "OPTIONS", "/api/workflow/*/module/*/position", cors_preflight)
+HTTP.register!(router, "OPTIONS", "/api/workflow/*/module/*/parameters", cors_preflight)
+HTTP.register!(router, "OPTIONS", "/api/workflow/*/connection", cors_preflight)
+HTTP.register!(router, "OPTIONS", "/api/workflow/*/connection/*", cors_preflight)
+HTTP.register!(router, "OPTIONS", "/api/workflow/*/commit", cors_preflight)
+HTTP.register!(router, "OPTIONS", "/health", cors_preflight)
 
 # Health check
 HTTP.register!(router, "GET", "/health", req -> begin
@@ -544,6 +565,39 @@ HTTP.register!(router, "PATCH", "/api/workflow/*/module/*/position", req -> begi
         @error "Error updating module position" exception=(e, catch_backtrace())
         error_msg = e isa ErrorException ? e.msg : string(e)
         json_response(Dict("error" => "Failed to update position", "message" => error_msg), status=400)
+    end
+end)
+
+# Update module parameters
+HTTP.register!(router, "PATCH", "/api/workflow/*/module/*/parameters", req -> begin
+    try
+        path_parts = split(HTTP.URIs.unescapeuri(req.target), "/")
+        workflow_id = path_parts[4]
+        module_id = parse(Int, path_parts[6])
+
+        body = JSON3.read(String(req.body))
+        parameters = Dict{String,Any}(String(k) => v for (k, v) in pairs(body))
+
+        session = get(WORKFLOW_SESSIONS, workflow_id, nothing)
+        if session === nothing
+            vt_file = joinpath(@__DIR__, "../../examples/$(workflow_id).vt")
+            if !isfile(vt_file)
+                return json_response(Dict("error" => "Workflow not found"), status=404)
+            end
+            session = get_or_create_session(workflow_id, vt_file)
+        end
+
+        update_module_parameters!(session, module_id, parameters)
+
+        json_response(Dict(
+            "success" => true,
+            "module_id" => module_id,
+            "parameters" => parameters
+        ))
+    catch e
+        @error "Error updating module parameters" exception=(e, catch_backtrace())
+        error_msg = e isa ErrorException ? e.msg : string(e)
+        json_response(Dict("error" => "Failed to update parameters", "message" => error_msg), status=400)
     end
 end)
 
