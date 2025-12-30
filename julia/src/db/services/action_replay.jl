@@ -329,6 +329,46 @@ function build_pipeline_from_state_lightweight(builder::PipelineBuilder)
         # Create module instance using the constructor
         mod = ModuleInstance(next_id, descriptor)
 
+        # Add parameters from functions (same logic as standard mode)
+        for func_id in mod_data["functions"]
+            if haskey(builder.functions, func_id)
+                func = builder.functions[func_id]
+                func_name = func["name"]
+
+                for param_id in func["parameters"]
+                    if haskey(builder.parameters, param_id)
+                        param = builder.parameters[param_id]
+                        param_name = param["name"]
+                        param_val = param["val"]
+
+                        if param_val != ""
+                            # Use function name as key if parameter name is empty or "<no description>"
+                            key = if param_name == "" || param_name == "<no description>"
+                                func_name
+                            else
+                                param_name
+                            end
+
+                            # Store parameter directly in mod.parameters dict
+                            mod.parameters[key] = param_val
+                        end
+                    end
+                end
+            end
+        end
+
+        # Add annotations from annotation data
+        if haskey(mod_data, "annotations")
+            for ann_id in mod_data["annotations"]
+                if haskey(builder.annotations, ann_id)
+                    ann = builder.annotations[ann_id]
+                    ann_key = ann["key"]
+                    ann_value = ann["value"]
+                    mod.annotations[ann_key] = ann_value
+                end
+            end
+        end
+
         # Add location (layout position) if available
         if haskey(mod_data, "location")
             loc_id = mod_data["location"]
@@ -420,13 +460,21 @@ function build_pipeline_from_state(builder::PipelineBuilder)
                     func = builder.functions[func_id]
                     func_name = func["name"]
 
+                    @debug "Processing function" func_name func_id num_params=length(func["parameters"])
+
                     for param_id in func["parameters"]
                         if haskey(builder.parameters, param_id)
                             param = builder.parameters[param_id]
+                            param_name = param["name"]
                             param_val = param["val"]
 
+                            @debug "Found parameter" param_name param_val func_name
+
                             if param_val != ""
+                                @info "Setting parameter: $func_name.$param_name = $param_val (module $(mod.descriptor.name) #$id)"
                                 set_parameter!(mod, func_name, param_val)
+                            else
+                                @debug "Skipping empty parameter" param_name func_name
                             end
                         end
                     end
@@ -443,6 +491,9 @@ function build_pipeline_from_state(builder::PipelineBuilder)
                     mod.layout_position = (x, y)
                 end
             end
+
+            # Debug: show final parameter state
+            @info "Module $(mod.descriptor.name) #$id final parameters: $(mod.parameters)"
         catch e
             @warn "Failed to add module" package=full_package name=name exception=e
         end

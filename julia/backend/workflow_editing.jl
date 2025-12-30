@@ -6,10 +6,6 @@ Used by the HTTP API to enable visual editing in visflow-lite.
 """
 
 using Dates
-
-# Load VisTrailsJL
-import Pkg
-Pkg.activate(joinpath(@__DIR__, ".."))
 using VisTrailsJL
 
 """
