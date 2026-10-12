@@ -89,6 +89,22 @@ function load_vistrail_internal(filename::String; version::Union{Int,Nothing}=no
         push!(vt.tags, tag)
     end
 
+    # Schema 1.0+ stores tags as <actionAnnotation key="__tag__" actionId=... value=name>.
+    # If an action was re-tagged, the annotation with the highest id wins;
+    # an empty value means the tag was removed.
+    latest_tag = Dict{Int, Tuple{Int, String}}()  # actionId => (annotation id, name)
+    for ann in findall("//actionAnnotation[@key='__tag__']", root)
+        attrs = attrs_dict(ann)
+        action_id = parse(Int, attrs["actionId"])
+        ann_id = parse(Int, get(attrs, "id", "0"))
+        if !haskey(latest_tag, action_id) || ann_id > latest_tag[action_id][1]
+            latest_tag[action_id] = (ann_id, get(attrs, "value", ""))
+        end
+    end
+    for (action_id, (_, name)) in sort(collect(latest_tag), by=first)
+        isempty(name) || push!(vt.tags, Tag(name, action_id))
+    end
+
     # Don't load all pipelines - reconstruct on demand instead
     # Store the XML root for later pipeline reconstruction
     # (In a real implementation, we'd store this differently)

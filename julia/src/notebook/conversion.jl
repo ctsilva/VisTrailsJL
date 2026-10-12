@@ -329,7 +329,7 @@ Dict representing the notebook JSON structure
 """
 function vistrail_workflow_to_notebook(vt_path::String, version::Int; output_path::String="")
     # Load the vistrail
-    vistrail = load_vistrail(vt_path)
+    vistrail = load_vistrail_internal(vt_path)
 
     # Get the pipeline for this version
     pipeline = get_pipeline(vistrail, version)

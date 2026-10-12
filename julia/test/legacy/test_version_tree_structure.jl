@@ -2,20 +2,19 @@
 Analyze version tree structure in gcd.vt
 """
 
-using Pkg
-Pkg.activate(@__DIR__)
-
-using VisTrailsJL
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
+using .VisTrailsJL
+using Test
 
 println("=" ^ 60)
 println("Analyzing Version Tree Structure")
 println("=" ^ 60)
 
-vt_file = joinpath(@__DIR__, "..", "examples", "gcd.vt")
+vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 
 println("\nLoading $vt_file...")
 
-vt = load_vistrail(vt_file)
+vt = load_vistrail_internal(vt_file)
 
 println("\nVistrail info:")
 println("  Total versions (actions): ", length(vt.actions))
@@ -135,4 +134,12 @@ else
     for (parent_id, child_ids) in branch_points[1:min(5, length(branch_points))]
         println("  Version $parent_id -> $(length(child_ids)) children: $child_ids")
     end
+end
+
+@testset "Version tree structure (gcd.vt)" begin
+    @test total_nodes > 0
+    @test length(roots) >= 1
+    # Every non-root version's parent must exist in the tree
+    @test all(haskey(vt.actions, p) for p in values(parents))
+    @test max_depth > 0
 end

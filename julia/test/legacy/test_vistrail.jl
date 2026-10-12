@@ -1,18 +1,23 @@
-using VisTrailsJL
+"""
+Load a .vt file, render its version tree and largest pipeline.
 
-if length(ARGS) < 1
-    println("Usage: julia test_vistrail.jl <path_to_vt_file>")
-    exit(1)
-end
+Usage: julia --project=. test/legacy/test_vistrail.jl [path_to_vt_file]
+Defaults to examples/gcd.vt when no path is given.
+"""
 
-vt_file = ARGS[1]
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
+using .VisTrailsJL
+using Test
+
+vt_file = length(ARGS) >= 1 ? ARGS[1] : joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
+out_dir = mktempdir()
 base_name = splitext(basename(vt_file))[1]
 
 println("="^70)
 println("Loading $vt_file...")
 println("="^70)
 
-vt = load_vistrail(vt_file)
+vt = load_vistrail_internal(vt_file)
 
 println("\nVistrail Info:")
 println("  Name: $(vt.name)")
@@ -26,7 +31,7 @@ println("Rendering Version Tree")
 println("="^70)
 
 tree_svg = render_version_tree_svg(vt, width=1200, height=800)
-tree_filename = "$(base_name)_tree.svg"
+tree_filename = joinpath(out_dir, "$(base_name)_tree.svg")
 write(tree_filename, tree_svg)
 println("✓ Saved version tree to: $tree_filename")
 
@@ -63,9 +68,16 @@ if largest_version !== nothing && largest_positioned > 0
     pipeline = vt.pipelines[largest_version]
     println("\nRendering version $largest_version to SVG...")
     svg = render_pipeline_svg(pipeline, width=2000, height=1600, module_width=120.0, module_height=60.0, port_size=6.0, margin=80.0)
-    workflow_filename = "$(base_name)_workflow.svg"
+    workflow_filename = joinpath(out_dir, "$(base_name)_workflow.svg")
     write(workflow_filename, svg)
     println("✓ Saved workflow to: $workflow_filename")
-else
-    println("\nERROR: No positioned modules found in any pipeline")
+end
+
+@testset "Load and render $(basename(vt_file))" begin
+    @test !isempty(vt.actions)
+    @test !isempty(vt.pipelines)
+    @test occursin("<svg", tree_svg)
+    @test largest_version !== nothing
+    @test largest_positioned > 0
+    @test isfile(workflow_filename)
 end

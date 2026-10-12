@@ -2,14 +2,13 @@
 Test tag loading and display
 """
 
-using Pkg
-Pkg.activate(@__DIR__)
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
+using .VisTrailsJL
+using Test
 
-using VisTrailsJL
-
-vt_file = joinpath(@__DIR__, "..", "examples", "terminator.vt")
+vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "terminator.vt")
 println("Loading $vt_file...")
-vt = load_vistrail(vt_file)
+vt = load_vistrail_internal(vt_file)
 
 println("\nVistrail Info:")
 println("  Total versions: ", length(vt.actions))
@@ -37,7 +36,7 @@ svg = render_version_tree_svg(vt,
                                show_stats=true)
 
 # Save
-output_file = joinpath(@__DIR__, "terminator_with_tags.svg")
+output_file = joinpath(mktempdir(), "terminator_with_tags.svg")
 write(output_file, svg)
 println("\n✓ Saved to: $output_file")
 
@@ -50,5 +49,14 @@ if !isempty(vt.tags)
         else
             println("  ❌ Tag \"$(tag.name)\" NOT in SVG")
         end
+    end
+end
+
+@testset "Tags (terminator.vt)" begin
+    @test !isempty(vt.tags)
+    @test occursin("<svg", svg)
+    for tag in vt.tags
+        @test haskey(vt.actions, tag.version_id)
+        @test occursin(tag.name, svg)
     end
 end

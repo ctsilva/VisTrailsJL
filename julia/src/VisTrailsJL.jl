@@ -31,7 +31,6 @@ include("core/interpreter/default.jl")
 # Rendering
 include("rendering/workflow_svg.jl")
 include("rendering/tree_layout.jl")
-include("rendering/version_tree_layout.jl")
 include("rendering/version_tree_svg.jl")
 include("rendering/auto_layout.jl")
 

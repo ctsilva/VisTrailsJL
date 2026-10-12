@@ -14,7 +14,7 @@ println("=" ^ 70)
 # Load gcd.vt (current version has full workflow with positions)
 vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 println("\nLoading $vt_file...")
-vt = load_vistrail(vt_file)
+vt = load_vistrail_internal(vt_file)
 
 println("\nVistrail Info:")
 println("  Current version: ", vt.current_version)

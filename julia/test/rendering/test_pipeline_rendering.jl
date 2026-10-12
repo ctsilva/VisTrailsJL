@@ -14,7 +14,7 @@ println("=" ^ 70)
 # Load a workflow with layout positions
 vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 println("\nLoading $vt_file...")
-vt = load_vistrail(vt_file)
+vt = load_vistrail_internal(vt_file)
 
 println("\nVistrail Info:")
 println("  Total versions: ", length(vt.actions))

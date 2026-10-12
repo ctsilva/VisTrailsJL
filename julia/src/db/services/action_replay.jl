@@ -471,7 +471,7 @@ function build_pipeline_from_state(builder::PipelineBuilder)
                             @debug "Found parameter" param_name param_val func_name
 
                             if param_val != ""
-                                @info "Setting parameter: $func_name.$param_name = $param_val (module $(mod.descriptor.name) #$id)"
+                                @info "Setting parameter: $func_name.$param_name = $param_val (module $(mod.descriptor.name) #$(mod.id))"
                                 set_parameter!(mod, func_name, param_val)
                             else
                                 @debug "Skipping empty parameter" param_name func_name
@@ -493,7 +493,7 @@ function build_pipeline_from_state(builder::PipelineBuilder)
             end
 
             # Debug: show final parameter state
-            @info "Module $(mod.descriptor.name) #$id final parameters: $(mod.parameters)"
+            @info "Module $(mod.descriptor.name) #$(mod.id) final parameters: $(mod.parameters)"
         catch e
             @warn "Failed to add module" package=full_package name=name exception=e
         end

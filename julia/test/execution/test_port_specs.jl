@@ -2,7 +2,7 @@
 include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
 using .VisTrailsJL
 
-vt = load_vistrail(joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt"))
+vt = load_vistrail_internal(joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt"))
 p = vt.pipelines[vt.current_version]
 
 println("\nModule Port Counts (from parsed portSpecs):")

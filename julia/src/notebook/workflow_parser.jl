@@ -71,15 +71,16 @@ function parse_workflow_notebook(path::String)
             push!(modules, mod)
         end
 
-        # Check for execute directive (and outputs specification)
+        # Check for execute directive
         if has_directive(cell, "execute")
             execute = true
+        end
 
-            # Parse outputs from the execute cell
-            if has_directive(cell, "outputs")
-                outputs_raw = get_directive(cell, "outputs")
-                outputs = parse_workflow_outputs(outputs_raw)
-            end
+        # Check for outputs specification (usually in the execute cell,
+        # but a standalone outputs cell is also accepted)
+        if has_directive(cell, "outputs")
+            outputs_raw = get_directive(cell, "outputs")
+            outputs = parse_workflow_outputs(outputs_raw)
         end
     end
 

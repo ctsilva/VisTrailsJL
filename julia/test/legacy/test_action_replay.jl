@@ -1,30 +1,29 @@
-using Pkg
-Pkg.activate(".")
+"""
+Test reconstructing a pipeline by replaying the actions in gcd.vt
+"""
 
-using VisTrailsJL
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
+using .VisTrailsJL
+using .VisTrailsJL: load_vt_xml, replay_actions_to_version
+using Test
 
 println("Testing action replay...")
 
-# Load XML
-include("src/db/services/io.jl")
-root = load_vt_xml("../examples/gcd.vt")
+vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
+root = load_vt_xml(vt_file)
 
-# Try action replay
-try
+@testset "Action replay (gcd.vt v134)" begin
     pipeline = replay_actions_to_version(root, 134)
-    println("✓ Success! Pipeline has $(length(pipeline.modules)) modules and $(length(pipeline.connections)) connections")
+    println("Pipeline has $(length(pipeline.modules)) modules and $(length(pipeline.connections)) connections")
 
     # Show some modules
     for (id, mod) in sort(collect(pipeline.modules), by=first)[1:min(5, length(pipeline.modules))]
         println("  Module $id: $(mod.descriptor.name)")
-        if !isempty(mod.parameters)
-            for (k, v) in mod.parameters
-                println("    $k = $v")
-            end
+        for (k, v) in mod.parameters
+            println("    $k = $v")
         end
     end
-catch e
-    println("✗ Error during action replay:")
-    showerror(stdout, e, catch_backtrace())
-    println()
+
+    @test !isempty(pipeline.modules)
+    @test !isempty(pipeline.connections)
 end
