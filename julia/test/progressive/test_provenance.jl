@@ -145,8 +145,9 @@ end
     end
 
     @testset "Progress of partial results" begin
+        # Stopped part way: a source large enough to outlast the stop
         p = Pipeline()
-        src = node!(p, "RandomTable"; rows=1_000_000)
+        src = node!(p, "RandomTable"; rows=20_000_000)
         mn = node!(p, "Min", src)
         pr = start!(ProgressiveEngine(workers=1, step_size=id -> 100_000), p)
         wait_until(() -> module_steps(pr.run, mn.id).items >= 200_000)
@@ -154,8 +155,11 @@ end
         done, total = module_progress(run, mn.id)
         @test done == module_steps(run, mn.id).items
         @test total == last_id(run.outputs[src.id]["result"])
-        @test 0 < done <= total < 1_000_000
+        @test 0 < done <= total < 20_000_000
 
+        p = Pipeline()
+        src = node!(p, "RandomTable"; rows=1_000_000)
+        mn = node!(p, "Min", src)
         run_full = run!(ProgressiveEngine(), p)
         @test module_progress(run_full, src.id) == (1_000_000, 1_000_000)
         @test module_progress(run_full, mn.id) == (1_000_000, 1_000_000)

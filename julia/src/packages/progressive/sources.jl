@@ -32,13 +32,19 @@ function step!(s::RandomTableState, ctx::StepContext, budget::Int)
     n = min(budget, s.remaining)
     # One value at a time, row by row, so the rows do not depend on step
     # sizes (filling an array draws a different, vectorized stream)
-    values = Matrix{Float64}(undef, length(s.columns), n)
-    for i in 1:n, k in eachindex(s.columns)
-        values[k, i] = rand(s.rng)
-    end
-    append!(s.table, NamedTuple{Tuple(s.columns)}(Tuple(values[k, :] for k in eachindex(s.columns))))
+    columns = [Vector{Float64}(undef, n) for _ in s.columns]
+    fill_rows!(columns, s.rng)
+    append!(s.table, NamedTuple{Tuple(s.columns)}(Tuple(columns)))
     s.remaining -= n
     return StepResult(s.remaining == 0 ? :done : :ready, n)
+end
+
+# Row by row: columns[k][i] gets the ((i - 1) * ncolumns + k)-th draw
+function fill_rows!(columns::Vector{Vector{Float64}}, rng)
+    @inbounds for i in eachindex(first(columns)), c in columns
+        c[i] = rand(rng)
+    end
+    return columns
 end
 
 # CSVLoader: reads `path` in chunks of lines

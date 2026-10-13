@@ -833,7 +833,9 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
   blocks (at most 16 accumulators per step) instead of one accumulator per
   16 384-row block; histogram loops behind a function barrier (their
   bounds are untyped parameters). The taxi dashboard (14.8 M rows, two 512²
-  histograms) went from 5.4 s to 0.15 s on one thread. `ready_to_step(state,
+  histograms) went from 5.4 s to 0.15 s on one thread; `RandomTable` writes
+  its columns directly (no matrix and copies: 0.36 → 0.24 s for 40 M values,
+  same rows). `ready_to_step(state,
   ctx)` hook: a fold whose parameter comes from an input without a value
   yet is not stepped (it completes if that never changes).
 - **Convergence (2026-10-13)**: `converged(state)` hook; sources and

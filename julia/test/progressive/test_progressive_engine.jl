@@ -440,10 +440,11 @@ final_results(run, m) = Dict(k => result_of(run, v) for (k, v) in pairs(m) if k 
         VT.on_module_step(o::Durations, run, mod, result, seconds) = mod.id == o.id && push!(o.d, seconds)
         quantum = 0.02
         pr = start!(ProgressiveEngine(quantum=quantum), p; observers=[Durations(durations, src.id)])
-        while length(durations) < 15
+        while length(durations) < 15 && !istaskdone(pr)   # the run may end first (fast steps)
             sleep(0.01)
         end
         stop!(pr); wait(pr)
+        @test length(durations) >= 8
         later = sort(durations[5:end])
         @test later[cld(length(later), 2)] < 3 * quantum      # median step within 3× the quantum
     end
