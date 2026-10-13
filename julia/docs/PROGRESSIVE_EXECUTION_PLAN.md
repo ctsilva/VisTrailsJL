@@ -1,6 +1,6 @@
 # Progressive Execution Plan for VisTrailsJL
 
-Status: Phases 0-4 done (branch `progressive-engine`). Started 2026-10-13.
+Status: Phases 0-4 and 5a done (branch `progressive-engine`). Started 2026-10-13.
 
 ## Goal
 
@@ -128,7 +128,7 @@ across append-only connections (enabled by segmented storage); then data
 parallelism inside steps via fold merges over fixed-size blocks. Measure each
 step against serial; stop when it does not pay.
 
-### Phase 5 — interaction and provenance
+### Phase 5 — interaction and provenance (5a: live inputs and priority; 5b: state across edits, provenance)
 - Live parameters (`#| live: true`, `Variable` modules); input mode with a
   latency budget and a reserved worker.
 - Live graph edits applied between sweeps and recorded as VisTrails actions:
@@ -296,3 +296,29 @@ Import its module catalog as descriptors, or drive it as an external engine.
   pending; no back-pressure (a fast producer can run far ahead of slow
   consumers); interactive priority (Phase 5) is not there yet, so an input
   change waits for running steps like any other work.
+- 2026-10-13: Phase 5a done. Input modules (`is_input_module`; `Variable`
+  in the progressive package) never finish while a run's inputs are open
+  (`start!` opens them, `close_inputs!` closes them, `run!` never opens
+  them). `set_variable!` sets the value, marks the modules downstream as the
+  interactive selection and wakes the scheduler. `param(ctx, name)` returns
+  a connected input's value before the parameter, and fold/map modules get
+  an optional input port per parameter; a change of such a control input
+  restarts the fold (from all rows) or the map (output rows deleted, all rows
+  remapped). Priority: selected modules step with `interactive_quantum`;
+  serial sweeps visit only them (re-read before each module, since a step
+  can yield); in parallel only they start steps, with one reserved slot,
+  on the interactive threadpool, and background folds give up data
+  parallelism meanwhile. Idle runs wait on an event channel (step
+  completions and wake-ups share it, so an input interrupts the parallel
+  scheduler's wait for a completion). One-shot modules whose producers
+  finished without providing an input now complete instead of waiting
+  forever. Tests: `test/progressive/test_interaction.jl` (driven parameters
+  in all engines, value changes mid-run for maps and folds, priority: no
+  background step starts during a serial interaction, latency < 1 s, idle
+  runs do not spin and wake on input and stop, errors); suite 28/28.
+
+  Measured latency (8 threads, a 1-billion-row background branch): Filter →
+  Count over 300 K rows caught up in 1.5-2.5 ms with 8 workers. Before the
+  shared event channel and reserved slot, 7-109 ms: the parallel scheduler
+  was blocked waiting for a background step to complete, and all workers
+  were busy.

@@ -55,6 +55,15 @@ function step! end
 finish!(state, ctx) = nothing
 
 """
+    is_input_module(module_type::Type) -> Bool
+
+Input modules (e.g. `Variable`) receive values from outside during a run
+(`set_variable!`). While a run's inputs are open they never finish, so a
+run started with `start!` keeps going until `close_inputs!` or `stop!`.
+"""
+is_input_module(::Type) = false
+
+"""
     default_step_size(module_type::Type) -> Int
 
 Items in a module's first step, before the time predictor has data.
@@ -79,9 +88,18 @@ end
 """
     param(ctx, name, default=nothing)
 
-A module parameter, or `default` if it is not set.
+A module parameter, or `default` if it is not set. If a value (e.g. a
+`Variable`) is connected to an input port of the same name, its current
+value wins: any parameter can be driven live.
 """
-param(ctx::StepContext, name::AbstractString, default=nothing) = get(ctx.mod.parameters, String(name), default)
+function param(ctx::StepContext, name::AbstractString, default=nothing)
+    sources = get(ctx.inputs, String(name), nothing)
+    if sources !== nothing && length(sources) == 1
+        source = only(sources)
+        source isa ProgressiveValue && has_value(source) && return current_value(source)
+    end
+    return get(ctx.mod.parameters, String(name), default)
+end
 
 has_input(ctx::StepContext, port::AbstractString) = !isempty(get(ctx.inputs, String(port), Any[]))
 
@@ -167,7 +185,8 @@ function predict(p::StepPredictor, quantum::Float64, default::Int)
 end
 
 """
-    ProgressiveEngine(; quantum=0.1, step_size=nothing, max_time=Inf, workers=Threads.nthreads())
+    ProgressiveEngine(; quantum=0.1, step_size=nothing, max_time=Inf, workers=Threads.nthreads(),
+                        interactive_quantum=0.02)
 
 Runs pipelines progressively: progressive modules in bounded steps of about
 `quantum` seconds each (sized by a time predictor), one-shot modules
@@ -176,6 +195,8 @@ recomputed when their inputs change. `step_size`, if given, is called as
 `max_time` bounds the whole run, in seconds. With `workers > 1`, steps of
 different modules run in parallel on threads (including a producer and its
 consumers); with `workers = 1`, modules step one at a time in sweeps.
+After an input changes (`set_variable!`), the modules downstream of it run
+first, with steps of `interactive_quantum` seconds, until they caught up.
 
 `run!` blocks until every module is done; `start!` runs in the background
 and returns a `ProgressiveRun` to watch, `stop!` and `wait` on.
@@ -185,6 +206,7 @@ Base.@kwdef struct ProgressiveEngine <: Engine
     step_size::Union{Nothing, Function} = nothing
     max_time::Float64 = Inf
     workers::Int = Threads.nthreads()
+    interactive_quantum::Float64 = 0.02
 end
 
 """
@@ -214,7 +236,14 @@ mutable struct ProgressiveState
     sweeps::Int
     @atomic stop_requested::Bool
     failures::Vector{Tuple{Int, Any, Any}}  # (module id, exception, backtrace)
+    @atomic inputs_open::Bool               # input modules keep the run alive
+    events::Channel{Int}                    # step completions (module id) and wake-ups (0)
+    interactive::Set{Int}                   # modules downstream of a recent input change
+    interaction_start::Float64
 end
+
+# Wake the scheduler (an input value, stop!, close_inputs!)
+wake!(state::ProgressiveState) = (put!(state.events, 0); state)
 
 """
     ProgressiveRun
@@ -231,12 +260,14 @@ end
     start!(engine::ProgressiveEngine, pipeline; observers=[], enable_logging=true) -> ProgressiveRun
 
 Start a progressive run in a background task on the current thread.
-Results are readable from `pr.run.outputs` while it runs.
+Results are readable from `pr.run.outputs` while it runs. Its input modules
+(`Variable`) accept values with `set_variable!` until `close_inputs!`.
 """
 function start!(engine::ProgressiveEngine, pipeline::Pipeline;
                 observers=ExecutionObserver[], enable_logging::Bool=true)
     run = PipelineRun(pipeline; observers=observers, enable_logging=enable_logging)
-    setup_progressive!(run)
+    state = setup_progressive!(run)
+    @atomic state.inputs_open = true
     task = @async execute_run!(engine, run)
     return ProgressiveRun(run, task)
 end
@@ -247,7 +278,95 @@ end
 Ask a progressive run to stop after the current step; partial results stay
 in the outputs. `wait(pr)` then returns normally.
 """
-stop!(pr::ProgressiveRun) = (@atomic pr.run.engine_state.stop_requested = true; pr)
+function stop!(pr::ProgressiveRun)
+    state = pr.run.engine_state
+    @atomic state.stop_requested = true
+    wake!(state)
+    return pr
+end
+
+"""
+    close_inputs!(pr::ProgressiveRun)
+
+No more input values: input modules finish, and the run ends when every
+other module has caught up.
+"""
+function close_inputs!(pr::ProgressiveRun)
+    state = pr.run.engine_state
+    @atomic state.inputs_open = false
+    wake!(state)
+    return pr
+end
+
+"""
+    set_variable!(pr::ProgressiveRun, mod, value)
+
+Give an input module (a `Variable`, by module or id) a new value during a
+run. The modules downstream of it then get priority and short steps
+(`interactive_quantum`) until they have caught up.
+"""
+function set_variable!(pr::ProgressiveRun, mod_or_id, value)
+    run = pr.run
+    state = run.engine_state
+    id = mod_or_id isa ModuleInstance ? mod_or_id.id : Int(mod_or_id)
+    mod = run.instances[id]
+    is_input_module(mod.descriptor.module_type) || error("module $id ($(mod.descriptor.name)) is not an input module")
+    (@atomic state.inputs_open) || error("the inputs of this run are closed")
+
+    selection = downstream_modules(run.pipeline, id)
+    lock(run.lock) do
+        union!(state.interactive, selection)
+        state.interaction_start = time()
+    end
+    set!(run.outputs[id]["result"], value)
+    notify_observers(on_interaction, run, id, value)
+    wake!(state)
+    return pr
+end
+
+"""
+    downstream_modules(pipeline, id) -> Set{Int}
+
+The modules reachable from `id` through connections (not `id` itself).
+"""
+function downstream_modules(pipeline::Pipeline, id::Int)
+    seen = Set{Int}()
+    stack = [id]
+    while !isempty(stack)
+        for conn in get_connections_from(pipeline, pop!(stack))
+            if !(conn.dest_module_id in seen)
+                push!(seen, conn.dest_module_id)
+                push!(stack, conn.dest_module_id)
+            end
+        end
+    end
+    return seen
+end
+
+interactive_selection(run::PipelineRun, state::ProgressiveState) = lock(() -> copy(state.interactive), run.lock)
+
+"""
+    background_during_interaction(ctx) -> Bool
+
+Whether this module is outside the modules an ongoing interaction is
+waiting for; such modules do not use data parallelism meanwhile, leaving
+the threads to the interaction.
+"""
+function background_during_interaction(ctx::StepContext)
+    run = ctx.run
+    (run === nothing || !(run.engine_state isa ProgressiveState)) && return false
+    selection = interactive_selection(run, run.engine_state)
+    return !isempty(selection) && !(ctx.mod.id in selection)
+end
+
+function end_interaction!(run::PipelineRun, state::ProgressiveState)
+    seconds = lock(run.lock) do
+        isempty(state.interactive) && return nothing
+        empty!(state.interactive)
+        time() - state.interaction_start
+    end
+    seconds === nothing || notify_observers(on_interaction_done, run, seconds)
+end
 
 function Base.wait(pr::ProgressiveRun)
     try
@@ -273,7 +392,8 @@ module_steps(run::PipelineRun, id::Int) =
 
 function setup_progressive!(run::PipelineRun)
     run.engine_state isa ProgressiveState && return run.engine_state
-    state = ProgressiveState(Dict{Int, ModuleProgress}(), 0, false, Tuple{Int, Any, Any}[])
+    state = ProgressiveState(Dict{Int, ModuleProgress}(), 0, false, Tuple{Int, Any, Any}[],
+                             false, Channel{Int}(Inf), Set{Int}(), 0.0)
     run.engine_state = state
 
     for id in run.order
@@ -350,11 +470,16 @@ function next_action(state::ProgressiveState, progress::ModuleProgress)
 
     if progress.style isa OneShot
         # Recompute when inputs changed (or never computed, once inputs exist)
-        (progress.state === false || changes) && one_shot_inputs_available(ctx) && return :step
-        producers_done && !changes && progress.state === true && return :complete
+        available = one_shot_inputs_available(ctx)
+        (progress.state === false || changes) && available && return :step
+        # Done once computed, or if its producers finished without providing inputs
+        producers_done && !changes && (progress.state === true || !available) && return :complete
         return :none
     end
     (progress.status == :ready || changes) && return :step
+    if is_input_module(ctx.mod.descriptor.module_type) && (@atomic state.inputs_open)
+        return :none
+    end
     producers_done && return :complete
     return :none
 end
@@ -377,26 +502,56 @@ function perform_step!(engine::ProgressiveEngine, run::PipelineRun, state::Progr
     if progress.style isa OneShot
         run_step!(engine, run, state, id, progress, () -> one_shot_step!(run, ctx, progress))
     else
+        quantum = id in interactive_selection(run, state) ? engine.interactive_quantum : engine.quantum
         budget = engine.step_size === nothing ?
-            predict(progress.predictor, engine.quantum, default_step_size(ctx.mod.descriptor.module_type)) :
+            predict(progress.predictor, quantum, default_step_size(ctx.mod.descriptor.module_type)) :
             max(1, Int(engine.step_size(id)))
         run_step!(engine, run, state, id, progress, () -> step!(progress.state, ctx, budget))
     end
 end
 
 # Serial: sweeps in topological order, one step at a time
+# Serial: sweeps in topological order, one step at a time. After an input
+# change, sweeps cover only the modules downstream of it until they caught up.
 function schedule_serial!(engine::ProgressiveEngine, run::PipelineRun, state::ProgressiveState)
     deadline = time() + engine.max_time
     while !all_finished(state) && !should_stop(state, deadline)
+        selection = interactive_selection(run, state)
+        progressed = false
         for id in run.order
             should_stop(state, deadline) && break
+            # Re-read: an input may change during the sweep (a step can yield)
+            selection = interactive_selection(run, state)
+            isempty(selection) || id in selection || continue
             progress = state.modules[id]
             finished(progress.status) && continue
-            apply_action!(engine, run, state, id, progress, next_action(state, progress))
+            action = next_action(state, progress)
+            action == :none && continue
+            apply_action!(engine, run, state, id, progress, action)
+            progressed = true
         end
         state.sweeps += 1
         notify_observers(on_sweep, run, state.sweeps)
-        yield()  # let other tasks (viewers, input handlers) run between sweeps
+        if !isempty(selection) && !progressed
+            end_interaction!(run, state)      # the interactive modules caught up
+        elseif !progressed
+            idle!(state)
+        else
+            yield()  # let other tasks (viewers, input handlers) run between sweeps
+        end
+    end
+end
+
+# Nothing to do: wait for an input value or stop! if inputs are open
+# (the serial scheduler only receives wake-ups on the event channel)
+function idle!(state::ProgressiveState)
+    if (@atomic state.inputs_open) && !(@atomic state.stop_requested)
+        take!(state.events)
+        while isready(state.events)   # coalesce several wake-ups
+            take!(state.events)
+        end
+    else
+        yield()
     end
 end
 
@@ -409,7 +564,7 @@ end
 function schedule_parallel!(engine::ProgressiveEngine, run::PipelineRun, state::ProgressiveState)
     deadline = time() + engine.max_time
     running = Set{Int}()
-    completed = Channel{Int}(Inf)
+    events = state.events   # completions (module id > 0) and wake-ups (0)
     last_started = Dict(id => 0 for id in run.order)
     clock = 0
 
@@ -421,10 +576,17 @@ function schedule_parallel!(engine::ProgressiveEngine, run::PipelineRun, state::
             return
         end
         push!(running, id)
-        Threads.@spawn try
+        step_task() = try
             perform_step!(engine, run, state, id, progress)
         finally
-            put!(completed, id)
+            put!(events, id)
+        end
+        # Interactive steps go to Julia's interactive threadpool when there is
+        # one, so they do not queue behind busy background work
+        if Threads.nthreads(:interactive) > 0 && id in interactive_selection(run, state)
+            Threads.@spawn :interactive step_task()
+        else
+            Threads.@spawn step_task()
         end
     end
 
@@ -442,9 +604,22 @@ function schedule_parallel!(engine::ProgressiveEngine, run::PipelineRun, state::
                     action == :step ? push!(candidates, id) :
                         apply_action!(engine, run, state, id, progress, action)
                 end
-                sort!(candidates, by=id -> last_started[id])   # stable: ties in topological order
+                selection = interactive_selection(run, state)
+                if !isempty(selection)
+                    if !any(in(selection), candidates) && !any(in(selection), running)
+                        end_interaction!(run, state)
+                    else
+                        # During an interaction only the selected modules start steps;
+                        # background steps already running finish (bounded by the quantum)
+                        filter!(in(selection), candidates)
+                    end
+                end
+                # Least recently stepped first (stable: ties in topological order)
+                sort!(candidates, by=id -> last_started[id])
+                # During an interaction one more step may run: a slot reserved for it
+                limit = isempty(selection) ? engine.workers : engine.workers + 1
                 for id in candidates
-                    length(running) >= engine.workers && break
+                    length(running) >= limit && break
                     launch!(id, state.modules[id])
                     started = true
                 end
@@ -454,21 +629,21 @@ function schedule_parallel!(engine::ProgressiveEngine, run::PipelineRun, state::
 
             if isempty(running)
                 (stopping || all_finished(state)) && break
-                started || yield()
+                started || idle!(state)
                 continue
             end
-            # Wait for a step to finish (then everything that finished meanwhile)
+            # Wait for a step to finish or a wake-up (then take everything pending)
             if !started || length(running) >= engine.workers || stopping
-                delete!(running, take!(completed))
+                delete!(running, take!(events))
             end
-            while isready(completed)
-                delete!(running, take!(completed))
+            while isready(events)
+                delete!(running, take!(events))
             end
         end
     catch
         # Interrupted: let running steps finish before leaving
         while !isempty(running)
-            delete!(running, take!(completed))
+            delete!(running, take!(events))
         end
         rethrow()
     end

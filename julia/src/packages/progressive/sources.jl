@@ -102,6 +102,23 @@ end
 
 finish!(s::CSVLoaderState, ctx::StepContext) = close(s.io)
 
+# Variable: an input module whose value changes during a run (set_variable!)
+
+struct VariableModule end
+execution_style(::Type{VariableModule}) = Progressive()
+is_input_module(::Type{VariableModule}) = true
+
+struct VariableState end
+
+function init_state(::Type{VariableModule}, ctx::StepContext)
+    out = set_output!(ctx, "result", ProgressiveValue{Any}())
+    v = param(ctx, "value")
+    v === nothing || set!(out, v)
+    return VariableState()
+end
+
+step!(::VariableState, ctx::StepContext, budget::Int) = StepResult(:blocked, 0)
+
 # Sink: consumes everything connected to `table`; outputs the number of rows
 
 struct SinkModule end
@@ -140,6 +157,9 @@ function register_progressive_sources!()
     register_module!(ModuleDescriptor(PROGRESSIVE_PACKAGE, "CSVLoader", CSVLoaderModule,
         InputPort[], [OutputPort("result", ProgressiveTable)],
         Tuple{String, Type}[("path", String), ("columns", Vector{String})]))
+    register_module!(ModuleDescriptor(PROGRESSIVE_PACKAGE, "Variable", VariableModule,
+        InputPort[], [OutputPort("result", ProgressiveValue)],
+        Tuple{String, Type}[("value", Any)]))
     register_module!(ModuleDescriptor(PROGRESSIVE_PACKAGE, "Sink", SinkModule,
         [InputPort("table", Any)], [OutputPort("count", ProgressiveValue)],
         Tuple{String, Type}[]))

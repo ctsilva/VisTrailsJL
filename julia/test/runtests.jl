@@ -59,7 +59,8 @@ const TEST_SUITES = Dict(
         "tests" => [
             "test_data_layer.jl",
             "test_progressive_engine.jl",
-            "test_parallel_progressive.jl"
+            "test_parallel_progressive.jl",
+            "test_interaction.jl"
         ]
     ),
     "execution" => Dict(

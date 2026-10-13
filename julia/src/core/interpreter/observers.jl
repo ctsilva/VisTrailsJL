@@ -27,6 +27,12 @@ on_module_step(::ExecutionObserver, run, mod, result, seconds) = nothing
 """Called after each sweep over the modules of a progressive run."""
 on_sweep(::ExecutionObserver, run, sweep) = nothing
 
+"""Called when an input module gets a value during a progressive run (`set_variable!`)."""
+on_interaction(::ExecutionObserver, run, module_id, value) = nothing
+
+"""Called when the modules downstream of an input change have caught up, with the elapsed time."""
+on_interaction_done(::ExecutionObserver, run, seconds) = nothing
+
 """Called when a module throws; the run is then aborted."""
 on_module_error(::ExecutionObserver, run, mod, err) = nothing
 

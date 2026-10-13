@@ -23,9 +23,11 @@ as they are added; the design and the remaining phases are in
 | Progressive modules: sources, statistics, histograms, filter, select | Phase 3b | [Progressive modules](#progressive-modules) |
 | Writing progressive modules: folds, maps, or the step contract | Phase 3b | [Writing progressive modules](#writing-progressive-modules) |
 | Parallel progressive execution: modules, producer/consumer overlap, data-parallel folds | Phase 4 | [Parallel progressive execution](#parallel-progressive-execution) |
+| Live inputs (`Variable`, `set_variable!`), parameters driven by inputs, interactive priority | Phase 5a | [Live inputs and interaction](#live-inputs-and-interaction) |
 
-Planned: live parameters, interactive priority and recording live edits in
-the version tree (Phase 5).
+Planned (Phase 5b): progressive state kept across edits (by signature),
+progress of partial results in provenance, live edits recorded in the
+version tree.
 
 ## Quick start
 
@@ -361,6 +363,62 @@ RandomTable of 20 M rows → Min, Mean, Var, Histogram1D, Histogram2D
 The source draws its random numbers sequentially (0.45 s for 20 M rows),
 which bounds the speedup of this pipeline.
 
+### Live inputs and interaction
+
+An input module (`Variable`) receives values from outside while a run is
+going. Connect it to a module's input port named like a parameter and it
+drives that parameter: every fold and map module (all statistics, `Filter`,
+`Select`, and modules defined with `define_fold_module!`/`define_map_module!`)
+has an optional input port per parameter.
+
+```julia
+p = Pipeline()
+src = add_module!(p, "org.vistrails.progressive", "RandomTable")
+set_parameter!(src, "rows", 50_000_000)
+threshold = add_module!(p, "org.vistrails.progressive", "Variable")
+set_parameter!(threshold, "value", 0.5)
+filt = add_module!(p, "org.vistrails.progressive", "Filter")
+set_parameter!(filt, "column", "x"); set_parameter!(filt, "op", "<")
+add_connection!(p, src, "result", filt, "table")
+add_connection!(p, threshold, "result", filt, "value")   # drives the "value" parameter
+
+pr = start!(ProgressiveEngine(), p)
+set_variable!(pr, threshold, 0.1)    # e.g. from a slider callback
+close_inputs!(pr)                    # no more input: the run ends when everything caught up
+wait(pr)
+```
+
+- A changed parameter restarts the module: a fold starts over from all
+  rows, a map deletes its output rows and maps every row again. Both then
+  proceed progressively, so a result for the new value appears quickly.
+- In a module's own code, `param(ctx, name, default)` returns the input's
+  current value when one is connected, else the parameter.
+- **Runs with inputs** started with `start!` keep going (input modules
+  never finish while inputs are open) until `close_inputs!(pr)` or
+  `stop!(pr)`. With `run!`, inputs are closed from the start: a `Variable`
+  is a constant. One-shot engines treat it as a constant too.
+- **While nothing is left to do**, a run with open inputs sleeps until the
+  next value or `stop!`: no busy loop.
+
+**Interactive priority.** After `set_variable!`, the modules downstream of
+the input form the *interactive selection* until they have caught up:
+
+- they step with `interactive_quantum` (default 0.02 s) instead of
+  `quantum`;
+- serially, sweeps visit only them;
+- in parallel, only they start new steps (steps already running finish),
+  one step beyond `workers` may run for them (a reserved slot), they go to
+  Julia's interactive threadpool when it exists, and background folds stop
+  using data parallelism meanwhile.
+
+Observers get `on_interaction(obs, run, module_id, value)` and, once the
+selection caught up, `on_interaction_done(obs, run, seconds)`.
+
+Measured (8 threads, Apple M5) while a 1-billion-row branch with `Var` and a
+256×256 `Histogram2D` keeps running: after a new threshold, a `Filter` →
+`Count` branch over 300 000 rows has caught up in 1.5-2.5 ms (8 workers;
+2-6 ms with 1 worker), over 3 million rows in 10-95 ms.
+
 ### Progressive modules
 
 Package `org.vistrails.progressive` (short name `progressive` in workflow
@@ -378,6 +436,7 @@ notebooks). Tables flow through ports named `table` (input) and `result`
 | `Filter` | `column`, `op` (`<`, `<=`, `>`, `>=`, `==`, `!=`), `value` | table of the matching rows |
 | `Select` | `columns` | table with those columns |
 | `Sink` | — (consumes any input) | port `count`: rows consumed |
+| `Variable` | `value` (initial) | `ProgressiveValue`: an input, set with `set_variable!` |
 
 In a workflow notebook:
 
@@ -630,6 +689,13 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 
 ## Changelog
 
+- **Phase 5a (2026-10-13)**: `Variable` input module, `set_variable!`,
+  `close_inputs!`, `is_input_module`; parameters driven by connected inputs
+  (`param`), with an optional input port per fold/map parameter; restart of
+  folds and maps on parameter changes; interactive selection with
+  `interactive_quantum`, serial sweeps limited to it, parallel priority,
+  reserved slot and interactive threadpool; idle runs sleep;
+  `on_interaction`, `on_interaction_done`.
 - **Phase 4 (2026-10-13)**: parallel progressive scheduler
   (`ProgressiveEngine(workers=N)`: task and pipeline parallelism, one step
   per module at a time, least-recently-stepped first, main-thread modules on

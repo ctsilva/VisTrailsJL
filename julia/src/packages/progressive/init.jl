@@ -3,7 +3,7 @@ Progressive Package (org.vistrails.progressive, short name `progressive`)
 
 Modules for the progressive engine (docs/EXECUTION.md):
 
-- sources: `RandomTable`, `CSVLoader`
+- sources: `RandomTable`, `CSVLoader`; input: `Variable`
 - folds over a table: `Count`, `Min`, `Max`, `Mean`, `Var`, `Histogram1D`, `Histogram2D`
 - maps over a table: `Filter`, `Select`
 - `Sink`: consumes its input

@@ -75,6 +75,7 @@ export next_created!, next_updated!, next_deleted!, take_changes!, take_value!
 
 # Progressive engine exports
 export ProgressiveEngine, ProgressiveRun, start!, stop!, module_status, module_steps
+export set_variable!, close_inputs!, is_input_module, on_interaction, on_interaction_done
 export ExecutionStyle, OneShot, Progressive, execution_style, StepResult, StepContext
 export init_state, step!, finish!, default_step_size
 export param, has_input, input_container, input_subscription, input_value, set_output!

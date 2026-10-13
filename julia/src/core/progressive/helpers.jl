@@ -11,7 +11,10 @@ Helpers for defining progressive modules without the subscription API
   deletions delete the output rows.
 
 Both register a module type in the registry, usable in pipelines and
-workflow notebooks like any other module.
+workflow notebooks like any other module. Every parameter also gets an
+optional input port of the same name: connecting a value (e.g. a
+`Variable`) there drives the parameter live, and a change restarts the
+module from all rows.
 """
 
 # Module types are generated per (package, name); the functions live in specs
@@ -90,7 +93,7 @@ function define_fold_module!(package::String, name::String;
     output in (:dict, :value) || throw(ArgumentError("output must be :dict or :value"))
     FOLD_SPECS[(package, name)] = FoldSpec(input, columns, init, update, result, output, output_type, merge)
     register_module!(ModuleDescriptor(package, name, FoldModule{Symbol(package), Symbol(name)},
-        [InputPort(input, ProgressiveTable)],
+        [InputPort(input, ProgressiveTable); control_ports(parameters)],
         [OutputPort("result", output == :dict ? ProgressiveDict : ProgressiveValue)],
         Tuple{String, Type}[(p[1], p[2]) for p in parameters]))
 end
@@ -112,8 +115,31 @@ function define_map_module!(package::String, name::String;
                             input::String="table", parameters::Vector=Tuple{String, Type}[])
     MAP_SPECS[(package, name)] = MapSpec(input, schema, map)
     register_module!(ModuleDescriptor(package, name, MapModule{Symbol(package), Symbol(name)},
-        [InputPort(input, ProgressiveTable)], [OutputPort("result", ProgressiveTable)],
+        [InputPort(input, ProgressiveTable); control_ports(parameters)], [OutputPort("result", ProgressiveTable)],
         Tuple{String, Type}[(p[1], p[2]) for p in parameters]))
+end
+
+# Optional input ports that drive parameters live
+control_ports(parameters) = InputPort[InputPort(String(p[1]), Any; optional=true) for p in parameters]
+
+"""
+    take_control_changes!(ctx, main_input) -> Bool
+
+Whether any input other than `main_input` (a control value) changed since
+the last call; consumes those changes.
+"""
+function take_control_changes!(ctx::StepContext, main_input::String)
+    changed = false
+    for (port, subs) in ctx.subscriptions
+        port == main_input && continue
+        for sub in subs
+            if has_changes(sub)
+                consume_all!(sub)
+                changed = true
+            end
+        end
+    end
+    return changed
 end
 
 same_schema(ctx, table::ProgressiveTable) = [n => eltype(column(table, n)) for n in column_names(table)]
@@ -160,9 +186,11 @@ end
 
 function step!(s::FoldState, ctx::StepContext, budget::Int)
     counts = pending(s.sub)
-    if counts.updated > 0 || counts.deleted > 0
+    controls_changed = take_control_changes!(ctx, s.spec.input)
+    if counts.updated > 0 || counts.deleted > 0 || controls_changed
         # Cannot update a fold incrementally: start over from all rows
         reset!(s.sub)
+        controls_changed && (s.columns = s.spec.columns(ctx, s.table))
         s.acc = s.spec.init(ctx, s.columns)
     end
 
@@ -201,7 +229,7 @@ end
 function fold_blocks(s::FoldState, ctx::StepContext, chunks)
     blocks = fold_block_list(chunks)
     fold_one(block) = s.spec.update(s.spec.init(ctx, s.columns), block, ctx)
-    partials = if Threads.nthreads() > 1 && length(blocks) > 1
+    partials = if Threads.nthreads() > 1 && length(blocks) > 1 && !background_during_interaction(ctx)
         fetch.([Threads.@spawn fold_one(b) for b in blocks])
     else
         map(fold_one, blocks)
@@ -257,6 +285,13 @@ end
 output_row(s::MapState, id::Int) = id <= length(s.out_id) ? s.out_id[id] : 0
 
 function step!(s::MapState, ctx::StepContext, budget::Int)
+    if take_control_changes!(ctx, s.spec.input)
+        # A parameter changed: remap every row from scratch
+        existing = row_ids(s.out)
+        isempty(existing) || delete!(s.out, existing)
+        fill!(s.out_id, 0)
+        reset!(s.sub)
+    end
     deleted = next_deleted!(s.sub)
     for id in deleted
         out = output_row(s, id)
