@@ -126,7 +126,8 @@ Render a pipeline to SVG. Automatically computes layout positions if not present
 
 # Arguments
 - `pipeline::Pipeline`: The pipeline to render
-- `width::Int=800`: SVG canvas width
+- `width::Int=800`: SVG canvas width (`nothing`, with `height=nothing`: sized to the
+  content at full scale, e.g. for documentation figures)
 - `height::Int=600`: SVG canvas height
 - `module_width::Float64=120.0`: Default module width
 - `module_height::Float64=60.0`: Default module height
@@ -139,8 +140,8 @@ Render a pipeline to SVG. Automatically computes layout positions if not present
 """
 
 function render_pipeline_svg(pipeline::Pipeline;
-                             width::Int=800,
-                             height::Int=600,
+                             width::Union{Int, Nothing}=800,
+                             height::Union{Int, Nothing}=600,
                              module_width::Float64=120.0,
                              module_height::Float64=60.0,
                              port_size::Float64=8.0,
@@ -164,6 +165,7 @@ function render_pipeline_svg(pipeline::Pipeline;
 
         if isempty(positioned_modules)
             @warn "No layout positions found and auto-layout disabled - rendering empty SVG"
+            width = something(width, 800); height = something(height, 600)
             println(io, """<?xml version="1.0" encoding="UTF-8"?>""")
             println(io, """<svg width="$width" height="$height" xmlns="http://www.w3.org/2000/svg">""")
             println(io, """  <text x="$(width/2)" y="$(height/2)" text-anchor="middle" fill="#999">""")
@@ -174,16 +176,22 @@ function render_pipeline_svg(pipeline::Pipeline;
         end
     end
 
-    # Find bounding box from module positions
-    positions = [mod.layout_position for (_, mod) in positioned_modules]
-    min_x = minimum(p[1] for p in positions) - module_width/2
-    max_x = maximum(p[1] for p in positions) + module_width/2
-    min_y = minimum(p[2] for p in positions) - module_height/2
-    max_y = maximum(p[2] for p in positions) + module_height/2
+    # Find bounding box from module positions and box widths (boxes widen to fit labels)
+    box_width(mod) = max(module_width, estimate_text_width(get(mod.annotations, "__desc__", mod.descriptor.name)) + 40.0)
+    min_x = minimum(mod.layout_position[1] - box_width(mod)/2 for (_, mod) in positioned_modules)
+    max_x = maximum(mod.layout_position[1] + box_width(mod)/2 for (_, mod) in positioned_modules)
+    min_y = minimum(mod.layout_position[2] for (_, mod) in positioned_modules) - module_height/2
+    max_y = maximum(mod.layout_position[2] for (_, mod) in positioned_modules) + module_height/2
 
-    # Calculate scale to fit in canvas
     bbox_width = max_x - min_x
     bbox_height = max_y - min_y
+    if width === nothing || height === nothing
+        # Canvas sized to the content, at full scale
+        width = ceil(Int, bbox_width + 2*margin)
+        height = ceil(Int, bbox_height + 2*margin)
+    end
+
+    # Calculate scale to fit in canvas
     available_width = width - 2*margin
     available_height = height - 2*margin
 
@@ -201,7 +209,7 @@ function render_pipeline_svg(pipeline::Pipeline;
 
     # SVG header
     println(io, """<?xml version="1.0" encoding="UTF-8"?>""")
-    println(io, """<svg width="$width" height="$height" xmlns="http://www.w3.org/2000/svg">""")
+    println(io, """<svg width="$width" height="$height" viewBox="0 0 $width $height" xmlns="http://www.w3.org/2000/svg">""")
 
     # Add CSS styles
     println(io, """  <defs>""")

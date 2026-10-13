@@ -51,6 +51,13 @@ write("workflow.svg", svg)
 - XML character escaping (e.g., `<`, `>`, `&`)
 - Module labels from `__desc__` annotation or module name
 - Automatic scaling to fit canvas
+- `width=nothing, height=nothing`: canvas sized to the content at full scale
+  (for documentation figures); the SVG has a `viewBox`, so it scales when embedded
+- Pipelines without stored positions are laid out with Graphviz (`dot`), told
+  each box's real width so that boxes widened for their labels do not overlap
+
+Example: `examples/taxivis/render_pipeline.jl` draws the TaxiVis dataflow
+(`examples/taxivis/pipeline.svg`) from the pipeline the app builds.
 
 ## Lightweight Rendering Mode
 

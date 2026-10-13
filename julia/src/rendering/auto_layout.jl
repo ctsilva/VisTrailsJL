@@ -51,12 +51,14 @@ function generate_dot_string(pipeline::Pipeline)
 
     println(io, "digraph workflow {")
     println(io, "  rankdir=TB;")  # Top to bottom layout
-    println(io, "  node [shape=box];")
+    # Boxes as wide as the renderer draws them (they widen to fit their label),
+    # so that Graphviz spaces them without overlaps
+    println(io, "  node [shape=box, fixedsize=true];")
 
     # Add spacing controls to prevent overlap
     # nodesep: minimum space between nodes in same rank (in inches)
     # ranksep: minimum space between ranks (in inches)
-    println(io, "  nodesep=1.0;")  # 1 inch = 72 points horizontal spacing
+    println(io, "  nodesep=0.4;")  # between boxes of a rank, beyond their own widths
     println(io, "  ranksep=1.5;")  # 1.5 inches = 108 points vertical spacing
 
     # Add nodes
@@ -64,7 +66,8 @@ function generate_dot_string(pipeline::Pipeline)
         label = get(mod.annotations, "__desc__", mod.descriptor.name)
         # Escape quotes in label
         label = replace(label, "\"" => "\\\"")
-        println(io, "  n$id [label=\"$label\"];")
+        width, height = calculate_module_size(get(mod.annotations, "__desc__", mod.descriptor.name), 120.0, 60.0)
+        println(io, "  n$id [label=\"$label\", width=$(width / 72), height=$(height / 72)];")
     end
 
     # Add edges

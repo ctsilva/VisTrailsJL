@@ -99,15 +99,25 @@ tolerance 1 needs 65% of the trips, 2: 30%, 3: 17%, 4: 10%.
 
 ## Dataflow
 
-```
-ArrowLoader ─┬─ TripHistogram × 4 (all trips: pickup/dropoff maps, neighborhoods)
-             └─ TripFilter_q ── TripHistogram_q × 9 (maps, 5 attributes, neighborhoods)
-   Variable (view bounds, mode) ──► map histograms
-   Variable (constraints_q) ──► TripFilter_q                       for q = 1, 2, 3
-```
+![The TaxiVis pipeline, drawn by VisTrailsJL](pipeline.svg)
 
-39 modules: the loader, the view and three constraints `Variable`s, 3
-filters, 8 map, 15 attribute and 8 neighborhood histograms.
+*The pipeline as `build_dataflow` creates it, drawn by VisTrailsJL's workflow
+renderer (`render_pipeline.jl`; one query shown, queries 2 and 3 are
+copies). Top: the constraints `Variable` of the query, the `ArrowLoader`,
+and the view `Variable` (bounds and mode). Middle: the query's `TripFilter`
+and the four summaries of all trips. Bottom: the query's nine summaries
+(maps, five attributes, neighborhoods). Every summary reads the loader's
+table; a query's summaries also read its filter's selection, revision and
+progress, and its constraints (to know whether the query is enabled); maps
+also read the view.*
+
+39 modules in all: the loader, the view and three constraints `Variable`s,
+3 filters, 8 map, 15 attribute and 8 neighborhood histograms. Regenerate
+the figure after changing the dataflow:
+
+```sh
+julia --project=julia julia/examples/taxivis/render_pipeline.jl
+```
 
 - `ArrowLoader` (package `progressive`) appends the memory-mapped rows of
   the Arrow file to a `ProgressiveTable`, in stratified (January) or random
@@ -138,6 +148,7 @@ filters, 8 map, 15 attribute and 8 neighborhood histograms.
 | `dataflow.jl` | query validation, `TripFilter` and `TripHistogram` modules, the pipeline |
 | `server.jl` | application state, `/state` snapshot, map rendering (PNG), HTTP routes |
 | `TaxiVis.jl` | the example as a module (`include` it, then `using .TaxiVis`) |
+| `render_pipeline.jl`, `pipeline.svg` | draws the dataflow with VisTrailsJL's workflow renderer |
 | `app.jl` | command-line entry point |
 | `static/` | the page, from ProgressiVis |
 
