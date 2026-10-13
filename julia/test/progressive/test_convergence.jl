@@ -24,6 +24,7 @@ mutable struct EnoughState
     rows::Int
     need::Int
     opinion::Bool
+    delay::Float64          # seconds per step (a slow consumer)
     out::ProgressiveValue{Int}
 end
 
@@ -31,13 +32,14 @@ function VT.init_state(::Type{EnoughModule}, ctx::StepContext)
     out = VT.set_output!(ctx, "result", ProgressiveValue{Int}())
     set!(out, 0)
     return EnoughState(input_subscription(ctx, "table"), 0, Int(VT.param(ctx, "need", 0)),
-                       Bool(VT.param(ctx, "opinion", true)), out)
+                       Bool(VT.param(ctx, "opinion", true)), Float64(VT.param(ctx, "delay", 0.0)), out)
 end
 
 function VT.step!(s::EnoughState, ctx::StepContext, budget::Int)
     s.need = Int(VT.param(ctx, "need", s.need))
     has_input(ctx, "need") && has_changes(input_subscription(ctx, "need")) && take_value!(input_subscription(ctx, "need"))
     ids = next_created!(s.sub, budget)
+    s.delay > 0 && !isempty(ids) && sleep(s.delay)
     s.rows += length(ids)
     set!(s.out, s.rows)
     return StepResult(has_changes(s.sub) ? :ready : :blocked, length(ids))
@@ -48,7 +50,7 @@ VT.converged(s::EnoughState) = s.opinion ? s.rows >= s.need : nothing
 VT.register_module!(VT.ModuleDescriptor(TP, "Enough", EnoughModule,
     [VT.InputPort("table", ProgressiveTable), VT.InputPort("need", Any; optional=true)],
     [VT.OutputPort("result", ProgressiveValue)],
-    Tuple{String, Type}[("need", Int), ("opinion", Bool)]))
+    Tuple{String, Type}[("need", Int), ("opinion", Bool), ("delay", Float64)]))
 
 function node!(p, package, name, sources...; port="table", params...)
     m = add_module!(p, package, name)
@@ -81,7 +83,9 @@ const STEP = 1_000
             enough = node!(p, TP, "Enough", src; need=10_000)
             run = run!(engine(), p)
             @test 10_000 <= loaded(run, src) <= 10_000 + 4 * STEP   # a few steps may be in flight
-            @test value(run, enough) == loaded(run, src)            # consumers read what was loaded
+            # A converged module does not consume rows loaded meanwhile (data
+            # backlog only steps modules that need data)
+            @test 10_000 <= value(run, enough) <= loaded(run, src)
             @test module_status(run, src.id) == :done                # completed as converged
             @test module_status(run, enough.id) == :done
             @test module_converged(run, enough.id) === true
@@ -97,6 +101,15 @@ const STEP = 1_000
             node!(p, TP, "Enough", src; need=50_000)
             run = run!(engine(), p)
             @test 50_000 <= loaded(run, src) <= 50_000 + 4 * STEP
+        end
+
+        @testset "Backpressure: a slow consumer holds the source back ($workers workers)" begin
+            p = Pipeline()
+            src = node!(p, P, "RandomTable"; rows=ROWS)
+            slow = node!(p, TP, "Enough", src; need=30_000, delay=0.002)
+            run = run!(engine(), p)
+            @test 30_000 <= loaded(run, src) <= 30_000 + 4 * STEP
+            @test 30_000 <= value(run, slow) <= loaded(run, src)
         end
 
         @testset "Consumers without an opinion want everything ($workers workers)" begin
@@ -150,7 +163,7 @@ const STEP = 1_000
             close_inputs!(pr)
             run = wait(pr)
             @test module_status(run, src.id) == :done
-            @test value(run, enough) == loaded(run, src)
+            @test 30_000 <= value(run, enough) <= loaded(run, src)
         end
     end
 

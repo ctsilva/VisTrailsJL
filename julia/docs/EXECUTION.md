@@ -434,14 +434,30 @@ VisTrailsJL.converged(s::MyState) = s.rows >= 10_000   # true, false, or nothing
 opinion, it needs what its consumers need. The engine calls it after every
 step of the module (on the thread that ran the step) and at setup.
 
-A module **wants data** unless it is finished or converged; a module
-without an opinion wants data if it has no consumers or one of its
-consumers wants data. A module that would step only because it is `:ready`
-on its own (a source, or work left over), not because its inputs changed,
-steps only while it wants data; otherwise it is **paused**. Modules whose
-inputs changed always step, so an interaction reaches the modules that
-consume it, and if they no longer converge (a new query, a zoom) the
-sources resume.
+Where some module at or below a module reports convergence:
+
+- a module **needs data** unless it is finished or converged; with no
+  opinion, if it has no consumers or one of them wants more data;
+- it **wants more data** if it needs data and has consumed all its input
+  (**backpressure**: a consumer that is behind would not converge sooner
+  with more data, so a fast source stays about one step ahead of the
+  slowest consumer still needing data). For a module stepping on another
+  thread, the engine uses the backlog recorded after its last step, or new
+  output from a producer since its step started.
+
+Steps then depend on what changed:
+
+- **control inputs** (values and dicts: parameters, a view, a revision)
+  always step the module, so an interaction reaches the modules that
+  consume it, and if they no longer converge (a new query, a zoom) the
+  sources resume;
+- **data** (new table rows) and work left over step a module only while it
+  needs data: a converged module leaves rows that arrived meanwhile;
+- a module `:ready` on its own (a source) steps only while it wants more
+  data. Otherwise it is **paused**.
+
+Without modules that report convergence, nothing changes: every leaf wants
+all the data.
 
 - `run!`: once nothing can progress and the paused modules are all that
   is left, they complete (annotated `converged` in the execution log) and
@@ -451,16 +467,19 @@ sources resume.
   a module downstream want data again.
 - `module_converged(run, id)`, `is_paused(run, id)`: a module's last answer,
   and whether the last sweep paused it.
-- Without modules that implement `converged`, behavior is unchanged: every
-  leaf wants all the data.
 - With several workers, a source and the modules between it and a
   converged module may run a few steps ahead while it catches up (the
-  pipeline in flight); those rows are then consumed.
+  pipeline in flight); a converged module does not consume those rows.
+- A module that converged can skip work in `step!` when stepped for a
+  control input (e.g. return `StepResult(:blocked, 0)`).
 
 Tests: `test/progressive/test_convergence.jl` (a source stops when its
-consumer converged, the most demanding consumer decides, leaves without an
-opinion want everything, through a filter, a live input resumes a paused
-source and no steps happen while paused; 1 and 4 workers).
+consumer converged, the most demanding consumer decides, backpressure from
+a slow consumer, leaves without an opinion want everything, through a
+filter, a live input resumes a paused source and no steps happen while
+paused; 1 and 4 workers). Example: TaxiVis on a year of trips
+(`examples/taxivis/README.md`) loads 18% of 173 M trips before its
+displays converge.
 
 ### Edits during a run
 
@@ -809,7 +828,10 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 - **Convergence (2026-10-13)**: `converged(state)` hook; sources and
   modules with work left over step only while a module downstream wants
   data, and resume when one does again; `run!` completes paused modules
-  (annotated `converged`); `module_converged`, `is_paused`.
+  (annotated `converged`); `module_converged`, `is_paused`. Then:
+  backpressure (a source waits for consumers still needing data to catch
+  up), control inputs vs data (table rows step a module only while it
+  needs data).
 - **TaxiVis (2026-10-13)**: `ArrowLoader` progressive source (with
   `throttle` and `rate`, to watch a fast source load), `gather`;
   example `examples/taxivis/` (port of ProgressiVis' progressive TaxiVis:

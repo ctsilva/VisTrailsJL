@@ -229,6 +229,9 @@ mutable struct ModuleProgress
     started::Bool
     mod_exec::Union{ModuleExec, Nothing}
     converged::Union{Nothing, Bool}   # converged(state) after the last step (see `converged`)
+    backlog::Bool                     # input left unconsumed after the last step
+    launched_at::Int                  # step clock when its current or last step started
+    completed_at::Int                 # step clock when its last step ended
 end
 
 """
@@ -246,6 +249,7 @@ mutable struct ProgressiveState
     interactive::Set{Int}                   # modules downstream of a recent input change
     interaction_start::Float64
     consumers::Dict{Int, Vector{Int}}       # modules reading each module's outputs
+    @atomic clock::Int                      # counts step completions
     paused::Set{Int}                        # ready modules no one downstream needed (last sweep;
                                             # replaced, never mutated, so other threads may read it)
 end
@@ -406,7 +410,7 @@ function setup_progressive!(run::PipelineRun, engine=nothing)
                              false, Channel{Int}(Inf), Set{Int}(), 0.0,
                              Dict(id => unique!([c.dest_module_id for c in get_connections_from(run.pipeline, id)])
                                   for id in run.order),
-                             Set{Int}())
+                             0, Set{Int}())
     run.engine_state = state
 
     for id in run.order
@@ -454,7 +458,7 @@ function setup_progressive!(run::PipelineRun, engine=nothing)
         end
         state.modules[id] = ModuleProgress(:ready, style, module_state, ctx, StepPredictor(),
                                            0, 0, false, nothing,
-                                           style isa Progressive ? converged(module_state) : nothing)
+                                           style isa Progressive ? converged(module_state) : nothing, false, 0, 0)
     end
     return state
 end
@@ -509,10 +513,11 @@ function next_action(state::ProgressiveState, progress::ModuleProgress, sweep=no
         producers_done && !changes && (progress.state === true || !available) && return :complete
         return :none
     end
-    changes && return :step
-    if progress.status == :ready
-        # Ready on its own (a source, or work left over): only if someone needs it
-        (sweep === nothing || wants_data!(sweep, state, ctx.mod.id)) && return :step
+    # Control inputs (values, dicts: parameters, view, revisions) always
+    # step; data (table rows) and work left over only while someone needs it
+    changes && (sweep === nothing || control_changes(ctx)) && return :step
+    if changes || progress.status == :ready
+        (sweep === nothing || needs_data!(sweep, state, ctx.mod.id)) && return :step
         push!(sweep.paused, ctx.mod.id)
         return :none
     end
@@ -523,35 +528,69 @@ function next_action(state::ProgressiveState, progress::ModuleProgress, sweep=no
     return :none
 end
 
-# What one sweep learned: which modules want data (memoized), which were paused
+# What one sweep learned: which modules want data and which have an opinion
+# downstream (memoized), which were paused; `running`: modules stepping on
+# other threads (their subscriptions are not read: their backlog is the one
+# recorded after their last step)
 struct Sweep
+    need::Dict{Int, Bool}
     demand::Dict{Int, Bool}
+    opinion::Dict{Int, Bool}
     paused::Set{Int}
+    running::Set{Int}
 end
-Sweep() = Sweep(Dict{Int, Bool}(), Set{Int}())
+Sweep(running=Set{Int}()) = Sweep(Dict{Int, Bool}(), Dict{Int, Bool}(), Dict{Int, Bool}(), Set{Int}(), running)
+
+# Whether `id` or a module downstream of it reports convergence
+function opinion_downstream!(sweep::Sweep, state::ProgressiveState, id::Int)
+    get!(sweep.opinion, id) do
+        state.modules[id].converged !== nothing ||
+            any(c -> opinion_downstream!(sweep, state, c), state.consumers[id])
+    end
+end
+
+control_changes(ctx::StepContext) =
+    any(has_changes(sub) for subs in values(ctx.subscriptions) for sub in subs if !(sub isa TableSubscription))
 
 """
+    needs_data!(sweep, state, id) -> Bool
     wants_data!(sweep, state, id) -> Bool
 
-Whether module `id` needs more data: not if it is finished or has converged
-(`converged(state) == true`); yes if it has not converged (`false`); with
-no opinion (`nothing`), yes if it has no consumers or one of its consumers
-wants data. The sweep memoizes the answers.
+Whether module `id` needs data (to process what it has, or more), and
+whether it wants *more* data. Without a module reporting convergence at or
+below it: yes (every leaf wants all the data). Otherwise it needs data
+unless it is finished or has converged (`converged(state) == true`); if it
+has not converged (`false`) it does, and with no opinion (`nothing`) if it
+has no consumers or one of them wants more data. It wants more data if it
+needs data and has no input left to consume (backpressure: more data would
+not help it converge sooner).
 """
-function wants_data!(sweep::Sweep, state::ProgressiveState, id::Int)
-    demand = sweep.demand
-    haskey(demand, id) && return demand[id]
-    demand[id] = true   # provisional (the graph is acyclic)
-    p = state.modules[id]
-    answer = if finished(p.status) || p.converged === true
-        false
-    elseif p.converged === false
-        true
-    else
-        consumers = state.consumers[id]
-        isempty(consumers) || any(c -> wants_data!(sweep, state, c), consumers)
+function needs_data!(sweep::Sweep, state::ProgressiveState, id::Int)
+    get!(sweep.need, id) do
+        p = state.modules[id]
+        opinion_downstream!(sweep, state, id) || return !finished(p.status)
+        if finished(p.status) || p.converged === true
+            false
+        elseif p.converged === false
+            true
+        else
+            consumers = state.consumers[id]
+            isempty(consumers) || any(c -> wants_data!(sweep, state, c), consumers)
+        end
     end
-    return demand[id] = answer
+end
+
+function wants_data!(sweep::Sweep, state::ProgressiveState, id::Int)
+    get!(sweep.demand, id) do
+        p = state.modules[id]
+        opinion_downstream!(sweep, state, id) || return !finished(p.status)
+        # A running module: its backlog after its last step, or new input since
+        # its current step started
+        backlog = id in sweep.running ?
+            p.backlog || any(q -> state.modules[q].completed_at > p.launched_at, p.context.producers) :
+            input_has_changes(p.context)
+        !backlog && needs_data!(sweep, state, id)
+    end
 end
 
 # End of a sweep: publish the modules it paused
@@ -620,7 +659,7 @@ function schedule_serial!(engine::ProgressiveEngine, run::PipelineRun, state::Pr
             action == :none && continue
             apply_action!(engine, run, state, id, progress, action)
             progressed = true
-            empty!(sweep.demand)   # a step may change what has converged
+            empty!(sweep.need); empty!(sweep.demand)   # a step may change what has converged
         end
         end_sweep!(state, sweep)
         state.sweeps += 1
@@ -664,6 +703,7 @@ function schedule_parallel!(engine::ProgressiveEngine, run::PipelineRun, state::
     function launch!(id, progress)
         clock += 1
         last_started[id] = clock
+        progress.launched_at = @atomic state.clock
         if thread_affinity(progress.context.mod.descriptor.module_type) == :main
             perform_step!(engine, run, state, id, progress)   # on this task
             return
@@ -689,7 +729,7 @@ function schedule_parallel!(engine::ProgressiveEngine, run::PipelineRun, state::
             started = false
             if !stopping
                 candidates = Int[]
-                sweep = Sweep()
+                sweep = Sweep(copy(running))
                 for id in run.order
                     id in running && continue
                     progress = state.modules[id]
@@ -765,7 +805,11 @@ function run_step!(engine, run::PipelineRun, state::ProgressiveState, id::Int,
 
     progress.steps += 1
     progress.items += result.items
-    progress.style isa Progressive && (progress.converged = converged(progress.state))
+    if progress.style isa Progressive
+        progress.converged = converged(progress.state)
+        progress.backlog = input_has_changes(progress.context)
+    end
+    progress.completed_at = (@atomic state.clock += 1)
     record!(progress.predictor, result.items, seconds)
     notify_observers(on_module_step, run, mod, result, seconds)
 
