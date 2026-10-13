@@ -1,0 +1,4 @@
+.venv-*/
+trees/
+data/
+results/*/*.json
