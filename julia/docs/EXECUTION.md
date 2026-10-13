@@ -19,10 +19,12 @@ as they are added; the design and the remaining phases are in
 | Parallel execution of independent modules (`ParallelEngine`) | Phase 2 | [Parallel execution](#parallel-execution) |
 | Thread affinity for Python and plotting modules | Phase 2 | [Parallel execution](#thread-affinity) |
 | Change-tracked containers: `ProgressiveTable`, `ProgressiveDict`, `ProgressiveValue` | Phase 3a | [Progressive data](#progressive-data) |
+| Progressive execution in time-bounded steps (`ProgressiveEngine`), background runs | Phase 3b | [Progressive execution](#progressive-execution) |
+| Progressive modules: sources, statistics, histograms, filter, select | Phase 3b | [Progressive modules](#progressive-modules) |
+| Writing progressive modules: folds, maps, or the step contract | Phase 3b | [Writing progressive modules](#writing-progressive-modules) |
 
-Planned: the progressive engine that runs modules in bounded steps over
-these containers (Phase 3b), then parallel progressive execution, live
-parameters and recording live edits in the version tree (Phases 4-5).
+Planned: parallel progressive execution (Phase 4), then live parameters,
+interactive priority and recording live edits in the version tree (Phase 5).
 
 ## Quick start
 
@@ -56,6 +58,7 @@ A `Pipeline` is a specification; an engine executes it.
 | `OneShotEngine()` | Computes every module once, in topological order. Default of `execute_pipeline` and `execute_notebook_pipeline`. |
 | `CachedEngine()` | Like one-shot, but reuses outputs whose [signature](#signatures) was computed before. Keep the same engine object across runs to benefit. Default of the high-level `execute`. |
 | `ParallelEngine(base; max_tasks)` | Runs independent modules concurrently on threads; each module is executed by `base` (`OneShotEngine()` by default, or a `CachedEngine`). See [Parallel execution](#parallel-execution). |
+| `ProgressiveEngine(; quantum, step_size, max_time)` | Runs progressive modules in bounded steps, publishing improving partial results. See [Progressive execution](#progressive-execution). |
 
 ```julia
 run!(engine, pipeline; observers=ExecutionObserver[], enable_logging=true) -> PipelineRun
@@ -225,13 +228,195 @@ such modules; from another task the run fails with an error saying so.
 - Observer callbacks are called one at a time (under the run's lock), so
   observers need no synchronization of their own.
 
+## Progressive execution
+
+`ProgressiveEngine` runs a pipeline so that results appear early and
+improve: progressive modules process their inputs in bounded **steps**, each
+sized to take about `quantum` seconds, and publish their current result
+after each step. A pipeline over 20 M rows shows its first filtered count
+after ~15-40 ms; the complete results take as long as with the one-shot
+engine (6.1 s vs 6.2 s, `benchmarks/progressive_engine.jl`).
+
+```julia
+p = Pipeline()
+src = add_module!(p, "org.vistrails.progressive", "RandomTable")
+set_parameter!(src, "rows", 10_000_000)
+hist = add_module!(p, "org.vistrails.progressive", "Histogram1D")
+foreach(((k, v),) -> set_parameter!(hist, k, v), ["column" => "x", "bins" => 64, "min" => 0.0, "max" => 1.0])
+add_connection!(p, src, "result", hist, "table")
+
+run = run!(ProgressiveEngine(), p)                 # blocks until every module is done
+current_value(run.outputs[hist.id]["result"])     # the final counts
+```
+
+Outputs of a progressive run are containers (see [Progressive
+data](#progressive-data)): a `ProgressiveTable`, a `ProgressiveDict` or a
+`ProgressiveValue` per output port.
+
+### Watching a run
+
+`start!` runs in a background task (on the current thread) and returns at
+once; the outputs can be read while the run improves them:
+
+```julia
+pr = start!(ProgressiveEngine(), p)
+while !istaskdone(pr)
+    sleep(0.2)
+    counts = pr.run.outputs[hist.id]["result"]
+    has_value(counts) && display(current_value(counts))
+end
+run = wait(pr)            # the PipelineRun; rethrows a failure
+stop!(pr)                 # or stop early: partial results stay in the outputs
+```
+
+`module_status(run, id)` is `:ready`, `:blocked`, `:done`, `:failed` or
+`:cancelled`; `module_steps(run, id)` gives `(steps, items)`. Observers also
+receive `on_module_step(obs, run, mod, result, seconds)` after each step and
+`on_sweep(obs, run, sweep)` after each pass over the modules.
+
+### How it runs
+
+- The scheduler **sweeps** the modules in topological order. A module runs
+  a step when it has work: new input changes, or more to produce (a
+  source). It is skipped when blocked.
+- **Step sizes** come from a time predictor: items per second over the
+  module's last 7 steps, times `quantum` (default 0.1 s). The first step of
+  each module is ignored, since it includes JIT compilation; until data
+  exists, a module's `default_step_size` is used. `step_size=id -> n`
+  forces sizes (for tests).
+- **Termination by propagation**: a module is done when it says so (a
+  source that has produced everything), or when all its producers are done
+  and it has consumed all their changes.
+- **One-shot modules** take part: their outputs become `ProgressiveValue`s
+  and they recompute whenever an input changed (inputs are passed as plain
+  values: a table as a `NamedTuple` of columns, a dict as a `Dict`).
+- **Failures** are isolated: a failing module is `:failed`, everything
+  downstream of it `:cancelled`, the rest runs to completion; then `run!`
+  rethrows the error (a `CompositeException` for several).
+- `max_time` bounds a run; `stop!` ends it early.
+
+Progressive modules also run in the other engines: `OneShotEngine`,
+`CachedEngine` and `ParallelEngine` run them as a single unbounded step, so
+the same pipeline gives the same final results everywhere.
+
+### Guarantees (tested)
+
+- **Prefix consistency**: after every step, a statistic equals the batch
+  statistic over the rows the module has consumed so far; a filter's output
+  equals the filter applied to those rows. Checked under random step sizes.
+- **Eventual exactness**: final results equal the batch results.
+- **Interleaving independence**: final results do not depend on step sizes
+  (exactly for counts, min/max, histograms, filters; to rounding for
+  mean/variance).
+- Updates and deletions in a table reach every consumer: folds start over,
+  maps update or delete the affected output rows.
+
+Early results are prefixes of the input in arrival order, not samples: a
+file sorted by time shows its first rows first.
+
+### Progressive modules
+
+Package `org.vistrails.progressive` (short name `progressive` in workflow
+notebooks). Tables flow through ports named `table` (input) and `result`
+(output).
+
+| Module | Parameters | Output `result` |
+|--------|-----------|-----------------|
+| `RandomTable` | `columns` (default `["x", "y"]`), `rows` (1 000 000), `seed` (0) | table of uniform `Float64`; same rows whatever the step sizes |
+| `CSVLoader` | `path`, `columns` (optional subset) | table; types inferred from the first 1 000 rows, integers widened to `Float64` |
+| `Count` | — | `ProgressiveValue{Int}` |
+| `Min`, `Max`, `Mean`, `Var` | `columns` (default: numeric columns) | `ProgressiveDict` column → value |
+| `Histogram1D` | `column`, `bins` (64), `min`, `max` | `ProgressiveValue{Vector{Int}}` |
+| `Histogram2D` | `x_column`, `y_column`, `xbins`, `ybins`, `xmin`, `xmax`, `ymin`, `ymax` | `ProgressiveValue{Matrix{Int}}` |
+| `Filter` | `column`, `op` (`<`, `<=`, `>`, `>=`, `==`, `!=`), `value` | table of the matching rows |
+| `Select` | `columns` | table with those columns |
+| `Sink` | — (consumes any input) | port `count`: rows consumed |
+
+In a workflow notebook:
+
+```julia
+#| module-id: points
+#| module-type: progressive:RandomTable
+#| params:
+#|   rows: 20000
+
+#| module-id: left
+#| module-type: progressive:Filter
+#| params:
+#|   column: x
+#|   op: <
+#|   value: 0.5
+#| inputs:
+#|   table: points.result
+```
+
+and `execute_notebook_pipeline(pipeline, workflow; engine=ProgressiveEngine())`
+(example: `test/progressive/progressive_workflow.ipynb`).
+
+`CSVLoader` reads one line per row: quoted fields containing newlines are
+not supported.
+
+### Writing progressive modules
+
+Most modules are a **fold** (an accumulator over rows) or a **map** (rows
+in, rows out), and can be defined without touching subscriptions:
+
+```julia
+# A fold: sum of squares per column
+define_fold_module!("my.package", "SumSquares";
+    init   = (ctx, columns) -> Dict(c => 0.0 for c in columns),
+    update = (acc, chunk, ctx) -> (foreach(c -> acc[c] += sum(abs2, chunk[c]), keys(chunk)); acc),
+    result = (acc, ctx) -> acc)          # published into a ProgressiveDict
+
+# A map: a derived column (add `_keep = Bool vector` to filter rows)
+define_map_module!("my.package", "Radius";
+    schema = (ctx, table) -> [:r => Float64],
+    map    = (chunk, ctx) -> (r = sqrt.(chunk.x .^ 2 .+ chunk.y .^ 2),))
+```
+
+- A fold's `update` receives `chunk`, a `NamedTuple` of contiguous column
+  views (one call per storage segment); updates or deletions in the input
+  restart the fold from all rows. `output=:value` publishes `result` into a
+  `ProgressiveValue` instead of a dict. Parameters: `param(ctx, "name", default)`.
+- A map's output rows follow their input rows: updated inputs are
+  re-mapped, deleted inputs delete their outputs.
+
+For anything else, implement the step contract on your own module type:
+
+```julia
+struct MyModule end
+VisTrailsJL.execution_style(::Type{MyModule}) = Progressive()
+
+mutable struct MyState
+    sub::TableSubscription
+    out::ProgressiveValue{Int}
+end
+
+# Once, before the run: create outputs, keep subscriptions
+VisTrailsJL.init_state(::Type{MyModule}, ctx) =
+    MyState(input_subscription(ctx, "table"), set_output!(ctx, "result", ProgressiveValue{Int}(0)))
+
+# Repeatedly: consume at most `budget` items, publish, report
+function VisTrailsJL.step!(s::MyState, ctx, budget)
+    ids = next_created!(s.sub, budget)
+    isempty(ids) && return StepResult(:blocked, 0)
+    set!(s.out, current_value(s.out) + length(ids))
+    return StepResult(has_changes(s.sub) ? :ready : :blocked, length(ids))
+end
+```
+
+and register it with a `ModuleDescriptor` as usual. `StepResult` status:
+`:ready` (more work now), `:blocked` (waiting for input) or `:done`
+(finished; sources). Optional: `finish!(state, ctx)` when the module is
+done, `default_step_size(::Type{MyModule})` for the first steps. A module
+without inputs must not return `:blocked` (it would be considered done).
+
 ## Progressive data
 
-Progressive modules (Phase 3b, not yet available) will exchange data
-through containers that report what changed, so each consumer processes
-only new, updated or deleted items, in bounded chunks. The containers are
-usable on their own today. They correspond to ProgressiVis' `PTable`,
-`PDict` and `PIntSet`.
+Progressive modules exchange data through containers that report what
+changed, so each consumer processes only new, updated or deleted items, in
+bounded chunks. They correspond to ProgressiVis' `PTable`, `PDict` and
+`PIntSet`, and are usable on their own.
 
 ### ProgressiveTable
 
@@ -397,6 +582,13 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 
 ## Changelog
 
+- **Phase 3b (2026-10-13)**: `ProgressiveEngine` (sweeps, time predictor,
+  termination by propagation, isolated failures, `start!`/`stop!`/`wait`),
+  one-shot modules in progressive runs and progressive modules in one-shot
+  engines, `define_fold_module!`/`define_map_module!` and the step contract,
+  package `progressive` (RandomTable, CSVLoader, Count, Min, Max, Mean, Var,
+  Histogram1D/2D, Filter, Select, Sink), `on_module_step`/`on_sweep`,
+  `benchmarks/progressive_engine.jl`.
 - **Phase 3a (2026-10-13)**: progressive data layer: `ProgressiveTable`
   (segmented columns that never move, publish-after-write, Tables.jl),
   `RowIds`, `ProgressiveDict`, `ProgressiveValue`, subscriptions

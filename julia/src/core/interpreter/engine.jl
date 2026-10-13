@@ -90,7 +90,8 @@ State of one execution of a pipeline.
 - `reused`: ids of modules whose outputs came from a cache
 
 `lock` guards `outputs`, `reused`, the log and observer calls, which
-parallel engines update from several threads.
+parallel engines update from several threads. `engine_state` holds
+engine-specific scheduling state (e.g. the progressive engine's).
 """
 mutable struct PipelineRun
     pipeline::Pipeline
@@ -104,6 +105,7 @@ mutable struct PipelineRun
     workflow_exec::Union{WorkflowExec, Nothing}
     machine::Machine
     lock::ReentrantLock
+    engine_state::Any
 end
 
 function PipelineRun(pipeline::Pipeline;
@@ -123,7 +125,7 @@ function PipelineRun(pipeline::Pipeline;
                        subpipeline_signatures(pipeline, order),
                        reusable_modules(pipeline, order), Set{Int}(),
                        collect(ExecutionObserver, observers),
-                       workflow_exec, machine, ReentrantLock())
+                       workflow_exec, machine, ReentrantLock(), nothing)
 end
 
 """
@@ -155,6 +157,15 @@ logged and reported to the observers, and the exception is rethrown.
 function run!(engine::Engine, pipeline::Pipeline;
               observers=ExecutionObserver[], enable_logging::Bool=true)
     run = PipelineRun(pipeline; observers=observers, enable_logging=enable_logging)
+    return execute_run!(engine, run)
+end
+
+"""
+    execute_run!(engine::Engine, run::PipelineRun) -> PipelineRun
+
+Run every module of a prepared run, with logging and observer notifications.
+"""
+function execute_run!(engine::Engine, run::PipelineRun)
     notify_observers(on_run_start, run)
 
     try
@@ -289,10 +300,14 @@ end
 """
     compute_module(mod::ModuleInstance) -> Dict{String, Any}
 
-Run a module's implementation: a notebook-defined compute function if one is
-registered for its type, otherwise the `compute` method for its Julia type.
+Run a module's implementation: a progressive module in one unbounded pass,
+a notebook-defined compute function if one is registered for its type,
+otherwise the `compute` method for its Julia type.
 """
 function compute_module(mod::ModuleInstance)
+    if execution_style(mod.descriptor.module_type) isa Progressive
+        return compute_progressive(mod)
+    end
     notebook_compute = get_notebook_compute(mod.descriptor.package, mod.descriptor.name)
     if notebook_compute !== nothing
         return notebook_compute(mod)

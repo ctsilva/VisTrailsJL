@@ -47,6 +47,7 @@ include("packages/julia/init.jl")
 include("packages/control_flow/init.jl")
 include("packages/pythoncalc/init.jl")
 include("packages/matplotlib/init.jl")
+include("packages/progressive/init.jl")
 
 # Notebook support
 include("notebook/init.jl")
@@ -69,7 +70,16 @@ export RowIds, add!, remove!, take_first!, ranges
 export ProgressiveTable, SegmentedColumn, column, column_names, row_ids, last_id, segment_views
 export ProgressiveDict, snapshot, ProgressiveValue, set!, has_value, current_value
 export subscribe!, unsubscribe!, has_changes, reset!, pending
+export AbstractSubscription, TableSubscription, DictSubscription, ValueSubscription
 export next_created!, next_updated!, next_deleted!, take_changes!, take_value!
+
+# Progressive engine exports
+export ProgressiveEngine, ProgressiveRun, start!, stop!, module_status, module_steps
+export ExecutionStyle, OneShot, Progressive, execution_style, StepResult, StepContext
+export init_state, step!, finish!, default_step_size
+export param, has_input, input_container, input_subscription, input_value, set_output!
+export define_fold_module!, define_map_module!, numeric_columns, consumed_rows
+export on_module_step, on_sweep
 export Vistrail, Pipeline, ModuleInstance, Connection
 export add_module!, add_connection!, set_parameter!
 export print_vistrail_info, print_pipeline_info
@@ -106,6 +116,7 @@ function __init__()
     initialize_control_flow_package!()
     initialize_pythoncalc_package!()
     initialize_matplotlib_package!()
+    initialize_progressive_package!()
 end
 
 end # module

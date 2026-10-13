@@ -239,9 +239,11 @@ vistrail_workflow_to_notebook("examples/gcd.vt", 134; output_path="gcd.ipynb")
 #### Execution Engine (`julia/src/core/interpreter/`)
 
 Pipelines run through pluggable engines (`run!(engine, pipeline)`):
-`OneShotEngine`, and `CachedEngine`, which reuses results by subpipeline
-signature across runs and versions. A progressive/parallel execution model
-borrowing from ProgressiVis is being built in phases on the
+`OneShotEngine`; `CachedEngine` (reuses results by subpipeline signature
+across runs and versions); `ParallelEngine` (independent modules on
+threads); `ProgressiveEngine` (modules in time-bounded steps over
+change-tracked tables in `julia/src/core/progressive/`, after ProgressiVis;
+modules in `julia/src/packages/progressive/`). Built in phases on the
 `progressive-engine` branch.
 
 - `julia/docs/EXECUTION.md`: user guide to the current capabilities.

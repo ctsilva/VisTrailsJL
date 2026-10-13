@@ -332,9 +332,12 @@ run = run!(engine, pipeline)      # reuses everything
 run.reused                        # ids of modules taken from the cache
 ```
 
-The high-level `execute(vt)` keeps a `CachedEngine` per vistrail. See
-[docs/EXECUTION.md](docs/EXECUTION.md) for engines, caching, observers and
-writing modules.
+The high-level `execute(vt)` keeps a `CachedEngine` per vistrail.
+`ParallelEngine` runs independent modules on several threads, and
+`ProgressiveEngine` runs modules in time-bounded steps over growing tables,
+publishing partial results that improve until they are exact (after
+ProgressiVis). See [docs/EXECUTION.md](docs/EXECUTION.md) for engines,
+caching, progressive execution and writing modules.
 
 #### SVG Rendering Features
 

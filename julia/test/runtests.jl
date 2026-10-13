@@ -57,7 +57,8 @@ const TEST_SUITES = Dict(
         "path" => "progressive",
         "threads" => 4,
         "tests" => [
-            "test_data_layer.jl"
+            "test_data_layer.jl",
+            "test_progressive_engine.jl"
         ]
     ),
     "execution" => Dict(
@@ -72,7 +73,8 @@ const TEST_SUITES = Dict(
             "test_port_specs.jl",
             "test_engine.jl",
             "test_cached_engine.jl",
-            "test_parallel_engine.jl"
+            "test_parallel_engine.jl",
+            "test_package_load.jl"
         ]
     )
 )

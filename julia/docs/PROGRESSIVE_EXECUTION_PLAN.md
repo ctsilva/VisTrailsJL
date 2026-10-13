@@ -1,6 +1,6 @@
 # Progressive Execution Plan for VisTrailsJL
 
-Status: Phases 0-2 and 3a done (branch `progressive-engine`). Started 2026-10-13.
+Status: Phases 0-3 done (branch `progressive-engine`). Started 2026-10-13.
 
 ## Goal
 
@@ -224,3 +224,40 @@ Import its module catalog as descriptors, or drive it as an external engine.
   atomically by the hardware, not for others); no back-pressure (a slow
   consumer's buffers grow, as in ProgressiVis); `ProgressiveDict`
   iteration is not synchronized (use `snapshot`).
+- 2026-10-13: Phase 3b done. `src/core/progressive/engine.jl`:
+  `ProgressiveEngine` (sweeps in topological order; a module steps when
+  ready or when its inputs have changes; linear time predictor over the last
+  7 steps, first step ignored; termination by propagation; failures mark the
+  module `:failed` and its downstream `:cancelled`, the rest completes, then
+  the error is rethrown), `StepContext`, `StepResult`, `start!`/`stop!`/`wait`
+  on a background task. One-shot modules in progressive runs recompute on
+  input changes (outputs wrapped in `ProgressiveValue`s); progressive modules
+  in one-shot engines run as one unbounded step (`compute_progressive`).
+  `src/core/progressive/helpers.jl`: `define_fold_module!` (chunks of
+  segment views; reset on updates/deletions) and `define_map_module!` (output
+  rows keyed by input id; updates re-mapped, deletions propagated). Package
+  `progressive` (`src/packages/progressive/`): RandomTable, CSVLoader, Count,
+  Min, Max, Mean/Var (Chan merge), Histogram1D/2D, Filter, Select, Sink.
+  Tests: `test/progressive/test_progressive_engine.jl` (prefix consistency
+  under random step sizes, eventual exactness, interleaving independence,
+  same results in all engines, updates/deletions, events and logging,
+  one-shot bridging, background runs, failure isolation, CSV, predictor,
+  workflow notebook; sabotaging the fold update makes 29 checks fail);
+  `test/execution/test_package_load.jl` (`using VisTrailsJL` precompiles).
+  Suite 26/26. Benchmark (`benchmarks/progressive_engine.jl`, 20 M rows,
+  7 modules): first filtered count after 13-39 ms, done in 6.1 s vs 6.2 s
+  one-shot.
+
+  Found on the way: `RandomTable` first produced data that depended on step
+  sizes (column-wise generation, then Xoshiro's vectorized array fill draws
+  a different stream than scalar draws); it now draws one value at a time.
+  A `RowIds` constructor overwrote the default one and `Random` was not a
+  declared dependency: both broke `using VisTrailsJL` but not tests that
+  include the source, hence the new load test.
+
+  Open points: the scheduler is single-threaded (Phase 4); one-shot modules
+  downstream of a progressive module recompute after every upstream step
+  (can be costly, e.g. plots: throttle later); `Histogram1D/2D` need explicit
+  ranges (no rebinning from upstream Min/Max yet); `CSVLoader` does not
+  support quoted newlines; the `#| engine:` notebook directive is not
+  implemented yet (pass `engine=` to `execute_notebook_pipeline`).

@@ -21,6 +21,12 @@ on_module_done(::ExecutionObserver, run, mod, outputs) = nothing
 """Called instead of start/done when a module's outputs are reused from a cache."""
 on_module_cached(::ExecutionObserver, run, mod, outputs) = nothing
 
+"""Called after each step of a module in a progressive run, with its `StepResult`."""
+on_module_step(::ExecutionObserver, run, mod, result, seconds) = nothing
+
+"""Called after each sweep over the modules of a progressive run."""
+on_sweep(::ExecutionObserver, run, sweep) = nothing
+
 """Called when a module throws; the run is then aborted."""
 on_module_error(::ExecutionObserver, run, mod, err) = nothing
 
