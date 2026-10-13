@@ -20,7 +20,7 @@ end
 RowIds() = RowIds(UnitRange{Int}[])
 RowIds(r::UnitRange{Int}) = isempty(r) ? RowIds() : RowIds([r])
 
-function RowIds(ids)
+function RowIds(ids::Union{AbstractVector{<:Integer}, AbstractSet{<:Integer}})
     s = RowIds()
     for i in sort!(collect(Int, ids))
         add!(s, i)
