@@ -278,3 +278,8 @@ function compute(self::ModuleInstance, ::Type{MplHist})
     self.cache_state = :valid
     return self.outputs
 end
+
+# Plots.jl is not thread-safe: plotting modules run on the main thread
+for T in (MplFigure, MplFigureOutput, MplLinePlot, MplScatter, MplBar, MplHist)
+    @eval thread_affinity(::Type{$T}) = :main
+end

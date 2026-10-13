@@ -29,16 +29,53 @@ Cached outputs are shared between runs: modules must not mutate their inputs.
 """
 mutable struct CachedEngine <: Engine
     entries::Dict{String, Dict{String, Any}}  # subpipeline signature → outputs
+    lock::ReentrantLock
 end
 
-CachedEngine() = CachedEngine(Dict{String, Dict{String, Any}}())
+CachedEngine() = CachedEngine(Dict{String, Dict{String, Any}}(), ReentrantLock())
 
 """
     clear_cache!(engine::CachedEngine)
 
 Drop every cached result.
 """
-clear_cache!(engine::CachedEngine) = (empty!(engine.entries); engine)
+clear_cache!(engine::CachedEngine) = (lock(() -> empty!(engine.entries), engine.lock); engine)
+
+"""
+ParallelEngine(base=OneShotEngine(); max_tasks=Threads.nthreads())
+
+Runs independent modules concurrently on Julia threads: a module starts as
+soon as all its producers have finished, with at most `max_tasks` modules
+running at once. Each module is executed by `base` (e.g. a `CachedEngine`
+to reuse results), so results equal those of `base` alone.
+
+Modules whose type has `thread_affinity(T) == :main` (Python, plotting) run
+on the calling task, which must be the main thread. On a failure no new
+module starts; running modules are waited for, then the error is rethrown
+(a `CompositeException` if several modules failed).
+
+Start Julia with several threads (`julia -t auto`) for actual parallelism.
+"""
+struct ParallelEngine{E<:Engine} <: Engine
+    base::E
+    max_tasks::Int
+
+    function ParallelEngine(base::E=OneShotEngine(); max_tasks::Int=Threads.nthreads()) where {E<:Engine}
+        max_tasks >= 1 || throw(ArgumentError("max_tasks must be at least 1"))
+        return new{E}(base, max_tasks)
+    end
+end
+
+clear_cache!(engine::ParallelEngine) = (clear_cache!(engine.base); engine)
+
+"""
+    thread_affinity(module_type::Type) -> Symbol
+
+`:any` if a module may run on any thread (the default), `:main` if it must
+run on the main thread, e.g. because it calls Python or a non-thread-safe
+library.
+"""
+thread_affinity(::Type) = :any
 
 """
 PipelineRun
@@ -51,6 +88,9 @@ State of one execution of a pipeline.
 - `reusable`: module id → whether its results may be cached and reused:
   its type is cacheable and so is everything upstream of it
 - `reused`: ids of modules whose outputs came from a cache
+
+`lock` guards `outputs`, `reused`, the log and observer calls, which
+parallel engines update from several threads.
 """
 mutable struct PipelineRun
     pipeline::Pipeline
@@ -63,6 +103,7 @@ mutable struct PipelineRun
     observers::Vector{ExecutionObserver}
     workflow_exec::Union{WorkflowExec, Nothing}
     machine::Machine
+    lock::ReentrantLock
 end
 
 function PipelineRun(pipeline::Pipeline;
@@ -82,7 +123,7 @@ function PipelineRun(pipeline::Pipeline;
                        subpipeline_signatures(pipeline, order),
                        reusable_modules(pipeline, order), Set{Int}(),
                        collect(ExecutionObserver, observers),
-                       workflow_exec, machine)
+                       workflow_exec, machine, ReentrantLock())
 end
 
 """
@@ -101,8 +142,9 @@ function reusable_modules(pipeline::Pipeline, order::Vector{Int})
     return reusable
 end
 
+# Observers are called one at a time, even when modules run in parallel
 notify_observers(f, run::PipelineRun, args...) =
-    foreach(obs -> f(obs, run, args...), run.observers)
+    lock(() -> foreach(obs -> f(obs, run, args...), run.observers), run.lock)
 
 """
     run!(engine::Engine, pipeline::Pipeline; observers=[], enable_logging=true) -> PipelineRun
@@ -116,9 +158,7 @@ function run!(engine::Engine, pipeline::Pipeline;
     notify_observers(on_run_start, run)
 
     try
-        for module_id in run.order
-            execute_module!(engine, run, module_id)
-        end
+        schedule_modules!(engine, run)
     catch e
         run.workflow_exec !== nothing && mark_failed!(run.workflow_exec, string(e))
         notify_observers(on_run_done, run, e)
@@ -128,6 +168,18 @@ function run!(engine::Engine, pipeline::Pipeline;
     run.workflow_exec !== nothing && mark_completed!(run.workflow_exec)
     notify_observers(on_run_done, run, nothing)
     return run
+end
+
+"""
+    schedule_modules!(engine::Engine, run::PipelineRun)
+
+Execute every module of the run, each after its producers. The default runs
+them one at a time in topological order.
+"""
+function schedule_modules!(engine::Engine, run::PipelineRun)
+    for module_id in run.order
+        execute_module!(engine, run, module_id)
+    end
 end
 
 """
@@ -141,14 +193,16 @@ function execute_module!(engine::CachedEngine, run::PipelineRun, module_id::Int)
     signature = run.signatures[module_id]
     cacheable = run.reusable[module_id]
 
-    if cacheable && haskey(engine.entries, signature)
-        return reuse_module!(run, module_id, engine.entries[signature])
-    end
+    cached = cacheable ? lock(() -> get(engine.entries, signature, nothing), engine.lock) : nothing
+    cached !== nothing && return reuse_module!(run, module_id, cached)
 
     outputs = compute_module!(run, module_id)
-    cacheable && (engine.entries[signature] = outputs)
+    cacheable && lock(() -> engine.entries[signature] = outputs, engine.lock)
     return outputs
 end
+
+execute_module!(engine::ParallelEngine, run::PipelineRun, module_id::Int) =
+    execute_module!(engine.base, run, module_id)
 
 function new_module_exec(run::PipelineRun, mod::ModuleInstance)
     run.workflow_exec === nothing && return nothing
@@ -165,13 +219,13 @@ Record outputs taken from a cache as the module's result for this run.
 """
 function reuse_module!(run::PipelineRun, module_id::Int, outputs::Dict{String, Any})
     mod = run.instances[module_id]
-    run.outputs[module_id] = outputs
-    push!(run.reused, module_id)
-
     mod_exec = new_module_exec(run, mod)
-    if mod_exec !== nothing
-        mark_cached!(mod_exec)
-        add_module_exec!(run.workflow_exec, mod_exec)
+    mod_exec !== nothing && mark_cached!(mod_exec)
+
+    lock(run.lock) do
+        run.outputs[module_id] = outputs
+        push!(run.reused, module_id)
+        mod_exec !== nothing && add_module_exec!(run.workflow_exec, mod_exec)
     end
     notify_observers(on_module_cached, run, mod, outputs)
 
@@ -185,26 +239,25 @@ Gather a module's inputs from its (already executed) producers and compute it.
 """
 function compute_module!(run::PipelineRun, module_id::Int)
     mod = run.instances[module_id]
-    gather_inputs!(run, mod)
+    lock(() -> gather_inputs!(run, mod), run.lock)
 
     mod_exec = new_module_exec(run, mod)
     notify_observers(on_module_start, run, mod)
     outputs = try
-        compute_module(mod)
+        compute_module(mod)  # outside the lock: this is what runs in parallel
     catch e
         if mod_exec !== nothing
             mark_failed!(mod_exec, string(e))
-            add_module_exec!(run.workflow_exec, mod_exec)
+            lock(() -> add_module_exec!(run.workflow_exec, mod_exec), run.lock)
         end
         notify_observers(on_module_error, run, mod, e)
         rethrow()
     end
 
-    run.outputs[module_id] = outputs
-
-    if mod_exec !== nothing
-        mark_completed!(mod_exec)
-        add_module_exec!(run.workflow_exec, mod_exec)
+    mod_exec !== nothing && mark_completed!(mod_exec)
+    lock(run.lock) do
+        run.outputs[module_id] = outputs
+        mod_exec !== nothing && add_module_exec!(run.workflow_exec, mod_exec)
     end
     notify_observers(on_module_done, run, mod, outputs)
 

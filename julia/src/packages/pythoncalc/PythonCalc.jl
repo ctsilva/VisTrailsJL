@@ -99,3 +99,6 @@ function compute(mod::ModuleInstance, ::Type{PythonCalcModule})
 
     return mod.outputs
 end
+
+# PyCall must be used from the main thread
+thread_affinity(::Type{PythonCalcModule}) = :main

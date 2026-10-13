@@ -30,6 +30,7 @@ include("core/log/log.jl")
 include("core/interpreter/observers.jl")
 include("core/interpreter/signatures.jl")
 include("core/interpreter/engine.jl")
+include("core/interpreter/parallel.jl")
 
 # Rendering
 include("rendering/workflow_svg.jl")
@@ -54,10 +55,10 @@ include("api/api.jl")
 export load_vistrail, load_vistrail_internal, execute_pipeline, execute
 
 # Execution engine exports
-export Engine, OneShotEngine, CachedEngine, PipelineRun, run!, clear_cache!
+export Engine, OneShotEngine, CachedEngine, ParallelEngine, PipelineRun, run!, clear_cache!
 export ExecutionObserver, ConsoleObserver
 export on_run_start, on_module_start, on_module_done, on_module_cached, on_module_error, on_run_done
-export module_signature, subpipeline_signatures, is_cacheable
+export module_signature, subpipeline_signatures, is_cacheable, thread_affinity
 export get_input_list
 export Vistrail, Pipeline, ModuleInstance, Connection
 export add_module!, add_connection!, set_parameter!

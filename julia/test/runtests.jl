@@ -55,6 +55,7 @@ const TEST_SUITES = Dict(
     "execution" => Dict(
         "name" => "Execution Tests",
         "path" => "execution",
+        "threads" => 4,  # the parallel engine tests need several threads
         "tests" => [
             "test_python_modules.jl",
             "test_python_advanced.jl",
@@ -62,7 +63,8 @@ const TEST_SUITES = Dict(
             "test_pythoncalc_params.jl",
             "test_port_specs.jl",
             "test_engine.jl",
-            "test_cached_engine.jl"
+            "test_cached_engine.jl",
+            "test_parallel_engine.jl"
         ]
     )
 )
@@ -104,7 +106,7 @@ function run_test_suite(suite_name::String, suite_config::Dict)
         try
             # Run test as subprocess to avoid module conflicts
             result = run(pipeline(
-                `julia --project=. $test_path`,
+                `julia --project=. --threads=$(get(suite_config, "threads", 1)) $test_path`,
                 stdout=devnull,  # Suppress stdout
                 stderr=devnull   # Suppress stderr
             ); wait=true)

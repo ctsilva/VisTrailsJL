@@ -1,6 +1,6 @@
 # Progressive Execution Plan for VisTrailsJL
 
-Status: Phases 0 and 1 done (branch `progressive-engine`). Started 2026-10-13.
+Status: Phases 0-2 done (branch `progressive-engine`). Started 2026-10-13.
 
 ## Goal
 
@@ -179,3 +179,26 @@ Import its module catalog as descriptors, or drive it as an external engine.
   `select_version!` only works for versions already reconstructed (the
   loader replays one version), and only v122 of gcd.vt executes (earlier
   versions hit the `If`/`While` stubs) — both pre-existing.
+- 2026-10-13: Phase 2 done. `ParallelEngine(base; max_tasks)` in
+  `src/core/interpreter/parallel.jl`: dependency counting, ready modules
+  spawned with `Threads.@spawn` in topological order, completions through a
+  channel; `base` executes each module, so parallel + cached composes.
+  `thread_affinity` trait: `:main` modules (`PythonSource`, `PythonCalc`,
+  matplotlib) run inline on the calling task, which must be thread 1.
+  Runs and `CachedEngine` are now lock-protected (outputs, log, observers,
+  cache entries); `compute` runs outside the locks. Failures: stop
+  admitting, join running tasks, rethrow (or `CompositeException`).
+  Benchmark (`benchmarks/parallel_engine.jl`, 50 ms CPU-bound modules):
+  7.98× on 8 threads for wide and layered pipelines, 1.00× for a chain;
+  ~10-20 µs scheduling overhead per module. Tests:
+  `test/execution/test_parallel_engine.jl` (run by the suite with 4
+  threads; stable over repeated runs with 1, 2, 4 and 8 threads); suite 23/23.
+
+  Lesson: two spawned tasks may share a thread, so tests must not assume
+  that independent modules overlap; they check the contract instead.
+
+  Open points: `get_connections_to` scans all connections (quadratic setup
+  for pipelines with thousands of modules; precompute adjacency in
+  `PipelineRun`). JuliaSource and notebook modules run on worker threads
+  (they `eval` code; fine for self-contained code, not for code that
+  defines globals). A failure cannot interrupt a running module.
