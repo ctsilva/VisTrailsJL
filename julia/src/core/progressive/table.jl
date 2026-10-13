@@ -83,6 +83,24 @@ function segment_views(c::SegmentedColumn{T}, r::UnitRange{Int}) where {T}
 end
 
 """
+    gather(c::SegmentedColumn, ids::AbstractVector{<:Integer}) -> Vector
+
+Values at arbitrary published row ids (e.g. the ids of a selection), loading
+the segment list once rather than once per element.
+"""
+function gather(c::SegmentedColumn{T}, ids::AbstractVector{<:Integer}) where {T}
+    n = @atomic c.length
+    segments = @atomic c.segments
+    out = Vector{T}(undef, length(ids))
+    @inbounds for (k, id) in enumerate(ids)
+        1 <= id <= n || throw(BoundsError(c, id))
+        s, j = slot(c, Int(id))
+        out[k] = segments[s][j]
+    end
+    return out
+end
+
+"""
     segment(c::SegmentedColumn, k::Int) -> Vector
 
 The `k`-th storage segment (for tests and bulk readers).

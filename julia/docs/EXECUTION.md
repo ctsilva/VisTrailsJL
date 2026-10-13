@@ -27,6 +27,7 @@ as they are added; the design and the remaining phases are in
 | Progressive state kept across runs and edits (`ProgressiveStateCache`, `restart!`) | Phase 5b | [Edits during a run](#edits-during-a-run) |
 | Progress of partial results in provenance; execution history for ProgressiVis' viewer | Phase 5b | [Provenance of progressive runs](#provenance-of-progressive-runs) |
 | Live input changes recorded as versions (`VersionRecorder`) | Phase 5b | [Provenance of progressive runs](#provenance-of-progressive-runs) |
+| Arrow source (`ArrowLoader`), reads at arbitrary row ids (`gather`); example: progressive TaxiVis | TaxiVis | [Progressive modules](#progressive-modules) |
 
 ## Quick start
 
@@ -498,6 +499,7 @@ notebooks). Tables flow through ports named `table` (input) and `result`
 |--------|-----------|-----------------|
 | `RandomTable` | `columns` (default `["x", "y"]`), `rows` (1 000 000), `seed` (0) | table of uniform `Float64`; same rows whatever the step sizes |
 | `CSVLoader` | `path`, `columns` (optional subset) | table; types inferred from the first 1 000 rows, integers widened to `Float64` |
+| `ArrowLoader` | `path`, `columns` (optional subset), `throttle` (max rows per step, 0: none), `rate` (max rows per second, in chunks of 50 ms of rows; 0: none) | table with the file's column types; the file is memory-mapped |
 | `Count` | — | `ProgressiveValue{Int}` |
 | `Min`, `Max`, `Mean`, `Var` | `columns` (default: numeric columns) | `ProgressiveDict` column → value |
 | `Histogram1D` | `column`, `bins` (64), `min`, `max` | `ProgressiveValue{Vector{Int}}` |
@@ -621,7 +623,8 @@ Tables.columntable(t)     # a Tables.jl snapshot of the live rows (works with Da
   their values.
 - **Bulk reads**: `segment_views(column(t, :x), range)` returns contiguous
   views covering a range of ids, e.g. `sum(sum, segment_views(col, r))`;
-  `t[ids, :x]` copies values through them.
+  `t[ids, :x]` copies values through them; `gather(column(t, :x), ids)`
+  reads values at arbitrary ids (e.g. a selection's).
 
 ### Subscriptions
 
@@ -758,6 +761,10 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 
 ## Changelog
 
+- **TaxiVis (2026-10-13)**: `ArrowLoader` progressive source (with
+  `throttle` and `rate`, to watch a fast source load), `gather`;
+  example `examples/taxivis/` (port of ProgressiVis' progressive TaxiVis:
+  14.8 M trips, 39 modules, live queries over HTTP).
 - **Phase 5b (2026-10-13)**: `ProgressiveStateCache` (progressive state
   kept by signature across runs, edits and versions; LRU), `restart!`;
   `progress`/`module_progress` and progress annotations, partial results of

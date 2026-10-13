@@ -111,6 +111,13 @@ random_range(rng, maxid) = (a = rand(rng, 1:maxid); a:min(maxid, a + rand(rng, 0
             @test reduce(vcat, collect.(views); init=Int[]) == col[r]
         end
         @test_throws BoundsError segment_views(col, 1:last_id(t)+1)
+
+        # Values at arbitrary ids, across segments
+        ids = [last_id(t), 1, 5, 4, 5, 17]
+        @test gather(col, ids) == col[ids]
+        @test gather(col, Int[]) == Int[]
+        @test_throws BoundsError gather(col, [0])
+        @test_throws BoundsError gather(col, [last_id(t) + 1])
     end
 
     @testset "Subscriptions" begin

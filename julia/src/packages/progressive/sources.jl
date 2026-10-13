@@ -1,9 +1,10 @@
 """
-Progressive sources: RandomTable, CSVLoader; and Sink
+Progressive sources: RandomTable, CSVLoader, ArrowLoader; and Sink
 """
 
 using Random
 using CSV
+using Arrow
 
 # RandomTable: `rows` rows of uniform Float64 values in `columns`
 
@@ -108,6 +109,61 @@ end
 finish!(s::CSVLoaderState, ctx::StepContext) = close(s.io)
 progress(s::CSVLoaderState) = (s.bytes_read, s.bytes_total)   # bytes
 
+# ArrowLoader: streams the rows of an Arrow file (memory-mapped)
+
+struct ArrowLoaderModule end
+execution_style(::Type{ArrowLoaderModule}) = Progressive()
+default_step_size(::Type{ArrowLoaderModule}) = 100_000
+
+mutable struct ArrowLoaderState
+    source::Vector{AbstractVector}   # the file's columns, memory-mapped
+    names::Vector{Symbol}
+    table::ProgressiveTable
+    position::Int
+    rows::Int
+    throttle::Int                    # at most this many rows per step (0: no limit)
+    rate::Float64                    # at most this many rows per second (0: no limit)
+    started::Float64                 # time of the first step, for `rate`
+end
+
+function init_state(::Type{ArrowLoaderModule}, ctx::StepContext)
+    file = Arrow.Table(String(required_param(ctx, "path")))
+    names = param(ctx, "columns") === nothing ? collect(Symbol, Arrow.names(file)) :
+            as_symbols(param(ctx, "columns"))
+    source = AbstractVector[Tables.getcolumn(file, n) for n in names]
+    table = set_output!(ctx, "result", ProgressiveTable((n => eltype(c) for (n, c) in zip(names, source))...))
+    rows = isempty(source) ? 0 : length(first(source))
+    return ArrowLoaderState(source, names, table, 0, rows, as_int(param(ctx, "throttle", 0)),
+                            Float64(param(ctx, "rate", 0)), 0.0)
+end
+
+# Rows that `rate` allows now, in chunks of at least 50 ms worth of rows (so
+# consumers see a few large steps per second, not many tiny ones). Until a
+# chunk is due, the step waits (at most 20 ms) and loads nothing: a source has
+# no input to wake it, and returning at once would spin.
+const RATE_CHUNK_SECONDS = 0.05
+
+function rate_allowance(s::ArrowLoaderState)
+    s.rate > 0 || return typemax(Int)
+    s.started == 0 && (s.started = time())
+    chunk = min(max(1, floor(Int, s.rate * RATE_CHUNK_SECONDS)), s.rows - s.position)
+    due = (s.position + chunk) / s.rate              # seconds after start
+    wait = due - (time() - s.started)
+    wait > 0 && sleep(min(wait, 0.02))
+    allowed = floor(Int, s.rate * (time() - s.started)) - s.position
+    return allowed >= chunk ? allowed : 0
+end
+
+function step!(s::ArrowLoaderState, ctx::StepContext, budget::Int)
+    n = min(budget, s.rows - s.position, s.throttle > 0 ? s.throttle : typemax(Int), rate_allowance(s))
+    r = s.position+1:s.position+n
+    append!(s.table, NamedTuple{Tuple(s.names)}(Tuple(view(c, r) for c in s.source)))
+    s.position += n
+    return StepResult(s.position == s.rows ? :done : :ready, n)
+end
+
+progress(s::ArrowLoaderState) = (s.position, s.rows)
+
 # Variable: an input module whose value changes during a run (set_variable!)
 
 struct VariableModule end
@@ -167,6 +223,9 @@ function register_progressive_sources!()
     register_module!(ModuleDescriptor(PROGRESSIVE_PACKAGE, "CSVLoader", CSVLoaderModule,
         InputPort[], [OutputPort("result", ProgressiveTable)],
         Tuple{String, Type}[("path", String), ("columns", Vector{String})]))
+    register_module!(ModuleDescriptor(PROGRESSIVE_PACKAGE, "ArrowLoader", ArrowLoaderModule,
+        InputPort[], [OutputPort("result", ProgressiveTable)],
+        Tuple{String, Type}[("path", String), ("columns", Vector{String}), ("throttle", Int), ("rate", Float64)]))
     register_module!(ModuleDescriptor(PROGRESSIVE_PACKAGE, "Variable", VariableModule,
         InputPort[], [OutputPort("result", ProgressiveValue)],
         Tuple{String, Type}[("value", Any)]))

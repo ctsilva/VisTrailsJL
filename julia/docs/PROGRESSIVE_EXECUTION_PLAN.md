@@ -358,3 +358,31 @@ Import its module catalog as descriptors, or drive it as an external engine.
   value could join its signature to make its downstream resumable;
   `VersionRecorder` records `set_variable!` only (graph edits come from the
   editor as versions already).
+- 2026-10-13: Practical example, progressive TaxiVis
+  (`examples/taxivis/`), a port of ProgressiVis' `taxivis` with the same
+  data (Arrow file identical column by column to its Parquet file), page
+  and HTTP API. Added `ArrowLoader` (memory-mapped, optional `throttle`) and
+  `gather` (values at arbitrary row ids) to the core; the example defines
+  its own `TripFilter` (all of a query's constraints, rescans on change,
+  outputs a selection of ids and a revision) and `TripHistogram` (1D/2D,
+  over a selection or all trips, rebins on view changes, immutable
+  revision-tagged summaries). Queries and the view are `Variable`s set with
+  `set_variable!`. Full month, 8 threads: loaded in 3 s, all summaries
+  complete in 10 s; a Financial District weekend-night query completes in
+  4.3 s (first results 0.24 s) with 11,658 trips, as NumPy counts on the
+  Parquet file. Tests: `ArrowLoader` and `gather` in `test/progressive/`.
+
+  Open points: no automated tests for the example itself; browser
+  interaction not checked yet; `TripFilter`/`TripHistogram` could become
+  generic `progressive` modules.
+
+  Watching it load: `throttle` (rows per step) does not slow loading much,
+  since the engine steps a fast source 1 000+ times per second (1 000
+  rows/step still loads 1.1 M rows/s). `ArrowLoader` got `rate` (rows per
+  second, delivered in chunks of 50 ms worth of rows, waiting at most 20
+  ms inside a step when no chunk is due: a source has no input to wake
+  it). Also fixed a spin in the example: query histograms never consumed
+  their subscription to the trips table (read only through the
+  selection), so they stayed ready and stepped ~2 500 times/s each while
+  idle. Any module with an input it reads but does not consume has this
+  problem; an engine-level option for unsubscribed inputs would prevent it.

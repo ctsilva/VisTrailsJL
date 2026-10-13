@@ -37,3 +37,4 @@ doc/usersguide/_build/
 julia/*.svg
 !julia/examples/*.svg
 julia/test/legacy/*.svg
+julia/examples/taxivis/data/*.arrow

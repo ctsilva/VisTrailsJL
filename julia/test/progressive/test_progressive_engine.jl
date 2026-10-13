@@ -16,6 +16,7 @@ using Random
 using Tables
 using Logging
 using CSV
+using Arrow
 
 const VT = VisTrailsJL
 const P = "org.vistrails.progressive"
@@ -374,6 +375,41 @@ final_results(run, m) = Dict(k => result_of(run, v) for (k, v) in pairs(m) if k 
         @test module_steps(run, csv.id).steps == cld(n, 333)
         @test isapprox(result_of(run, mean)[:x], batch_mean(xs); rtol=1e-12)
         @test result_of(run, sel) == (label=labels,)
+    end
+
+    @testset "ArrowLoader" begin
+        path = joinpath(mktempdir(), "points.arrow")
+        rng = MersenneTwister(3)
+        n = 5_000
+        data = (x=rand(rng, Float32, n), k=rand(rng, Int16(1):Int16(9), n), label=rand(rng, ["a", "b"], n))
+        Arrow.write(path, data)
+
+        p = Pipeline()
+        arrow = node!(p, "ArrowLoader"; path=path)
+        mean = node!(p, "Mean", arrow; columns=["x"])
+        run = run!(ProgressiveEngine(step_size=id -> 333), p)
+        table = run.outputs[arrow.id]["result"]
+        @test eltype(column(table, :k)) == Int16                    # types kept
+        @test Tables.columntable(table) == data
+        @test module_steps(run, arrow.id).steps == cld(n, 333)
+        @test isapprox(result_of(run, mean)[:x], batch_mean(Float64.(data.x)); rtol=1e-6)
+
+        # A column subset; throttle caps the rows per step
+        p = Pipeline()
+        arrow = node!(p, "ArrowLoader"; path=path, columns=["label"], throttle=100)
+        run = run!(ProgressiveEngine(step_size=id -> 1_000), p)
+        @test Tables.columntable(run.outputs[arrow.id]["result"]) == (label=data.label,)
+        @test module_steps(run, arrow.id).steps == cld(n, 100)
+
+        # rate: rows per second, delivered in chunks of 50 ms worth of rows
+        p = Pipeline()
+        arrow = node!(p, "ArrowLoader"; path=path, rate=20_000.0)
+        count = node!(p, "Count", arrow)
+        t = @elapsed run = run!(ProgressiveEngine(step_size=id -> 100_000), p)
+        @test result_of(run, count) == n
+        @test 0.2 <= t < 2.0                                       # 5 000 rows at 20 000/s: 0.25 s
+        @test module_steps(run, count.id).items == n
+        @test module_steps(run, count.id).steps <= cld(n, 1_000) + 2   # chunks of >= 1 000 rows
     end
 
     @testset "Time predictor" begin
