@@ -31,6 +31,7 @@ struct FoldSpec
     result::Function     # (acc, ctx) -> Dict (output=:dict) or value (output=:value)
     output::Symbol
     output_type::Type
+    merge::Union{Function, Nothing}   # (acc, acc) -> acc, enables data parallelism
 end
 
 struct MapSpec
@@ -73,14 +74,21 @@ Register a progressive module that folds the rows of the table connected to
   (`output=:value`, of type `output_type`).
 
 `ctx` gives access to parameters (`param(ctx, "bins", 10)`).
+
+With `merge(acc1, acc2)` → accumulator (combining the folds of two
+consecutive pieces of rows, where `init` is the identity), the rows of a
+step are folded in blocks of `FOLD_BLOCK_ROWS`, on several threads when
+Julia has them, and merged in block order. Blocks do not depend on the
+number of threads, so neither do the results.
 """
 function define_fold_module!(package::String, name::String;
                              init::Function, update::Function, result::Function,
+                             merge::Union{Function, Nothing}=nothing,
                              output::Symbol=:dict, output_type::Type=Dict{Symbol, Float64},
                              input::String="table", columns::Function=numeric_columns,
                              parameters::Vector=Tuple{String, Type}[])
     output in (:dict, :value) || throw(ArgumentError("output must be :dict or :value"))
-    FOLD_SPECS[(package, name)] = FoldSpec(input, columns, init, update, result, output, output_type)
+    FOLD_SPECS[(package, name)] = FoldSpec(input, columns, init, update, result, output, output_type, merge)
     register_module!(ModuleDescriptor(package, name, FoldModule{Symbol(package), Symbol(name)},
         [InputPort(input, ProgressiveTable)],
         [OutputPort("result", output == :dict ? ProgressiveDict : ProgressiveValue)],
@@ -160,11 +168,49 @@ function step!(s::FoldState, ctx::StepContext, budget::Int)
 
     ids = next_created!(s.sub, budget)
     isempty(ids) && return StepResult(:blocked, 0)
-    for chunk in column_chunks(s.table, s.columns, ids)
-        s.acc = s.spec.update(s.acc, chunk, ctx)
+    chunks = column_chunks(s.table, s.columns, ids)
+    if s.spec.merge === nothing
+        for chunk in chunks
+            s.acc = s.spec.update(s.acc, chunk, ctx)
+        end
+    else
+        s.acc = fold_blocks(s, ctx, chunks)
     end
     publish_fold!(s, ctx)
     return StepResult(has_changes(s.sub) ? :ready : :blocked, length(ids))
+end
+
+"""
+Rows per block for folds with a `merge` (data parallelism).
+"""
+const FOLD_BLOCK_ROWS = 16_384
+
+# Split chunks (one per storage segment) into blocks of at most FOLD_BLOCK_ROWS rows
+function fold_block_list(chunks)
+    blocks = NamedTuple[]
+    for chunk in chunks
+        n = length(first(chunk))
+        for lo in 1:FOLD_BLOCK_ROWS:n
+            hi = min(n, lo + FOLD_BLOCK_ROWS - 1)
+            push!(blocks, map(v -> view(v, lo:hi), chunk))
+        end
+    end
+    return blocks
+end
+
+function fold_blocks(s::FoldState, ctx::StepContext, chunks)
+    blocks = fold_block_list(chunks)
+    fold_one(block) = s.spec.update(s.spec.init(ctx, s.columns), block, ctx)
+    partials = if Threads.nthreads() > 1 && length(blocks) > 1
+        fetch.([Threads.@spawn fold_one(b) for b in blocks])
+    else
+        map(fold_one, blocks)
+    end
+    acc = s.acc
+    for p in partials
+        acc = s.spec.merge(acc, p)
+    end
+    return acc
 end
 
 function publish_fold!(s::FoldState, ctx::StepContext)
@@ -195,7 +241,7 @@ mutable struct MapState
     sub::TableSubscription
     out::ProgressiveTable
     out_columns::Vector{Symbol}
-    out_id::Dict{Int, Int}   # input row id → output row id
+    out_id::Vector{Int}      # input row id → output row id (0: none); input ids are dense
 end
 
 function init_state(T::Type{<:MapModule}, ctx::StepContext)
@@ -205,20 +251,25 @@ function init_state(T::Type{<:MapModule}, ctx::StepContext)
     schema = s.schema(ctx, table)
     out = ProgressiveTable(schema...)
     set_output!(ctx, "result", out)
-    return MapState(s, table, input_subscription(ctx, s.input), out, [first(p) for p in schema], Dict{Int, Int}())
+    return MapState(s, table, input_subscription(ctx, s.input), out, [first(p) for p in schema], Int[])
 end
+
+output_row(s::MapState, id::Int) = id <= length(s.out_id) ? s.out_id[id] : 0
 
 function step!(s::MapState, ctx::StepContext, budget::Int)
     deleted = next_deleted!(s.sub)
     for id in deleted
-        out = pop!(s.out_id, id, nothing)
-        out === nothing || delete!(s.out, out)
+        out = output_row(s, id)
+        if out != 0
+            delete!(s.out, out)
+            s.out_id[id] = 0
+        end
     end
 
     updated = next_updated!(s.sub, budget)
-    map_rows!(s, ctx, updated)
+    map_rows!(s, ctx, updated, false)
     created = next_created!(s.sub, max(0, budget - length(updated)))
-    map_rows!(s, ctx, created)
+    map_rows!(s, ctx, created, true)
 
     items = length(deleted) + length(updated) + length(created)
     items == 0 && return StepResult(:blocked, 0)
@@ -228,7 +279,9 @@ end
 consumed_rows(s::MapState) =
     lock(() -> setdiff(live_ids(s.table), s.sub.created), s.table.lock)
 
-function map_rows!(s::MapState, ctx::StepContext, ids::RowIds)
+# Map rows `ids`; `fresh` rows were never mapped before (created), the
+# others may have output rows to update or delete
+function map_rows!(s::MapState, ctx::StepContext, ids::RowIds, fresh::Bool)
     isempty(ids) && return
     input_names = column_names(s.table)
     chunk = NamedTuple{Tuple(input_names)}(Tuple(s.table[ids, n] for n in input_names))
@@ -237,27 +290,40 @@ function map_rows!(s::MapState, ctx::StepContext, ids::RowIds)
     length(keep) == length(ids) || error("$(ctx.mod.descriptor.name): map returned $(length(keep)) rows for $(length(ids))")
 
     id_list = collect(ids)
-    new_rows = Int[]
-    for (i, id) in enumerate(id_list)
-        existing = get(s.out_id, id, nothing)
-        if keep[i]
-            if existing === nothing
-                push!(new_rows, i)
-            else
-                for c in s.out_columns
-                    s.out[existing, c] = mapped[c][i]
+    last(id_list) > length(s.out_id) && append!(s.out_id, zeros(Int, last(id_list) - length(s.out_id)))
+
+    new_rows = if fresh
+        findall(keep)
+    else
+        rows = Int[]
+        for (i, id) in enumerate(id_list)
+            existing = s.out_id[id]
+            if keep[i]
+                if existing == 0
+                    push!(rows, i)
+                else
+                    for c in s.out_columns
+                        s.out[existing, c] = mapped[c][i]
+                    end
                 end
+            elseif existing != 0
+                delete!(s.out, existing)
+                s.out_id[id] = 0
             end
-        elseif existing !== nothing
-            delete!(s.out, existing)
-            delete!(s.out_id, id)
         end
+        rows
     end
 
     if !isempty(new_rows)
         rows = NamedTuple{Tuple(s.out_columns)}(Tuple(mapped[c][new_rows] for c in s.out_columns))
-        for (i, out) in zip(new_rows, append!(s.out, rows))
-            s.out_id[id_list[i]] = out
-        end
+        record_outputs!(s.out_id, id_list, new_rows, append!(s.out, rows))
+    end
+end
+
+# Function barrier: `new_rows` comes from user code, of a type unknown here
+function record_outputs!(out_id::Vector{Int}, id_list::Vector{Int}, new_rows::AbstractVector{<:Integer},
+                         outputs::UnitRange{Int})
+    for (i, out) in zip(new_rows, outputs)
+        out_id[id_list[i]] = out
     end
 end

@@ -182,10 +182,9 @@ function Base.getindex(t::ProgressiveTable, ids::RowIds, name::Symbol)
     col = column(t, name)
     out = Vector{eltype(col)}(undef, length(ids))
     i = 0
-    for r in ranges(ids)
-        for id in r
-            out[i += 1] = col[id]
-        end
+    for r in ranges(ids), v in segment_views(col, r)
+        copyto!(out, i + 1, v, 1, length(v))
+        i += length(v)
     end
     return out
 end

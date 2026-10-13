@@ -28,6 +28,9 @@ end
 
 per_column(f, columns) = Dict{Symbol, Any}(c => f(c) for c in columns)
 
+# Merge two per-column accumulators with `op`
+merge_columns(op) = (a, b) -> (foreach(c -> a[c] = op(a[c], b[c]), keys(b)); a)
+
 function histogram_bin(x, lo, hi, bins)
     (lo <= x <= hi) || return 0
     return x == hi ? bins : floor(Int, (x - lo) / (hi - lo) * bins) + 1
@@ -40,18 +43,21 @@ function register_progressive_statistics!()
         columns=(ctx, t) -> Symbol[first(column_names(t))],
         init=(ctx, cols) -> 0,
         update=(n, chunk, ctx) -> n + length(first(chunk)),
+        merge=+,
         result=(n, ctx) -> n,
         output=:value, output_type=Int)
 
     define_fold_module!(P, "Min";
         init=(ctx, cols) -> per_column(c -> Inf, cols),
         update=(acc, chunk, ctx) -> (foreach(c -> acc[c] = min(acc[c], minimum(chunk[c])), keys(chunk)); acc),
+        merge=merge_columns(min),
         result=(acc, ctx) -> acc,
         parameters=[("columns", Vector{String})])
 
     define_fold_module!(P, "Max";
         init=(ctx, cols) -> per_column(c -> -Inf, cols),
         update=(acc, chunk, ctx) -> (foreach(c -> acc[c] = max(acc[c], maximum(chunk[c])), keys(chunk)); acc),
+        merge=merge_columns(max),
         result=(acc, ctx) -> acc,
         parameters=[("columns", Vector{String})])
 
@@ -61,12 +67,14 @@ function register_progressive_statistics!()
     define_fold_module!(P, "Mean";
         init=(ctx, cols) -> per_column(c -> (0, 0.0, 0.0), cols),
         update=moments_update,
+        merge=merge_columns(merge_moments),
         result=(acc, ctx) -> Dict(c => m[2] for (c, m) in acc if m[1] > 0),
         parameters=[("columns", Vector{String})])
 
     define_fold_module!(P, "Var";
         init=(ctx, cols) -> per_column(c -> (0, 0.0, 0.0), cols),
         update=moments_update,
+        merge=merge_columns(merge_moments),
         result=(acc, ctx) -> Dict(c => m[3] / (m[1] - 1) for (c, m) in acc if m[1] > 1),
         parameters=[("columns", Vector{String})])
 
@@ -82,6 +90,7 @@ function register_progressive_statistics!()
             end
             counts
         end,
+        merge=(a, b) -> (a .+= b),
         result=(counts, ctx) -> copy(counts),
         output=:value, output_type=Vector{Int},
         parameters=[("column", String), ("bins", Int), ("min", Float64), ("max", Float64)])
@@ -100,6 +109,7 @@ function register_progressive_statistics!()
             end
             counts
         end,
+        merge=(a, b) -> (a .+= b),
         result=(counts, ctx) -> copy(counts),
         output=:value, output_type=Matrix{Int},
         parameters=[("x_column", String), ("y_column", String), ("xbins", Int), ("ybins", Int),

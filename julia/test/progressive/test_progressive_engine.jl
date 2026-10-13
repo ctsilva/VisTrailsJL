@@ -269,11 +269,18 @@ final_results(run, m) = Dict(k => result_of(run, v) for (k, v) in pairs(m) if k 
         VT.on_module_step(w::TextWatcher, run, mod, result, seconds) =
             mod.id == w.id && push!(w.texts, current_value(run.outputs[w.id]["text"]))
 
-        run = run!(ProgressiveEngine(step_size=id -> 2_000), p; observers=[TextWatcher(describe.id, texts)])
+        # Serially, the sweep order is deterministic: Describe sees intermediate minima
+        run = run!(ProgressiveEngine(workers=1, step_size=id -> 2_000), p; observers=[TextWatcher(describe.id, texts)])
         @test length(texts) > 1                                  # recomputed as the minimum improved
         final_min = result_of(run, mn)
-        @test last(texts) == "x=$(round(final_min[:x], digits=3)),y=$(round(final_min[:y], digits=3))"
+        expected = "x=$(round(final_min[:x], digits=3)),y=$(round(final_min[:y], digits=3))"
+        @test last(texts) == expected
         @test module_status(run, describe.id) == :done
+
+        # In parallel, how many intermediate results it sees depends on timing;
+        # the final one is the same
+        run = run!(ProgressiveEngine(step_size=id -> 2_000), p)
+        @test current_value(run.outputs[describe.id]["text"]) == expected
 
         # A one-shot constant feeding a progressive module
         p2 = Pipeline()
@@ -372,7 +379,8 @@ final_results(run, m) = Dict(k => result_of(run, v) for (k, v) in pairs(m) if k 
     @testset "Time predictor" begin
         pred = VT.StepPredictor()
         @test VT.predict(pred, 0.1, 500) == 500
-        VT.record!(pred, 10, 100.0)                    # first step ignored (compilation)
+        VT.record!(pred, 0, 2.0)                       # empty steps carry no information
+        VT.record!(pred, 10, 100.0)                    # first step with items ignored (compilation)
         @test VT.predict(pred, 0.1, 500) == 500
         VT.record!(pred, 1_000, 0.01)
         VT.record!(pred, 3_000, 0.03)                  # 100 000 items/s

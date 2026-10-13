@@ -132,7 +132,8 @@ input_has_changes(ctx::StepContext) =
     any(has_changes(sub) for subs in values(ctx.subscriptions) for sub in subs)
 
 # Time predictor: items per second over the last steps, ignoring each
-# module's first step (it includes JIT compilation)
+# module's first step that processed items (it includes JIT compilation of
+# the code that processes them; an earlier empty step may not)
 
 const PREDICTOR_WINDOW = 7
 const MAX_STEP_SIZE = 1 << 30
@@ -146,11 +147,11 @@ end
 StepPredictor() = StepPredictor(true, Int[], Float64[])
 
 function record!(p::StepPredictor, items::Int, seconds::Float64)
+    items > 0 || return p
     if p.first_step
         p.first_step = false
         return p
     end
-    items > 0 || return p
     push!(p.items, items); push!(p.seconds, seconds)
     if length(p.items) > PREDICTOR_WINDOW
         popfirst!(p.items); popfirst!(p.seconds)
@@ -166,13 +167,15 @@ function predict(p::StepPredictor, quantum::Float64, default::Int)
 end
 
 """
-    ProgressiveEngine(; quantum=0.1, step_size=nothing, max_time=Inf)
+    ProgressiveEngine(; quantum=0.1, step_size=nothing, max_time=Inf, workers=Threads.nthreads())
 
 Runs pipelines progressively: progressive modules in bounded steps of about
 `quantum` seconds each (sized by a time predictor), one-shot modules
 recomputed when their inputs change. `step_size`, if given, is called as
 `step_size(module_id)` to choose every step's size instead (for tests).
-`max_time` bounds the whole run, in seconds.
+`max_time` bounds the whole run, in seconds. With `workers > 1`, steps of
+different modules run in parallel on threads (including a producer and its
+consumers); with `workers = 1`, modules step one at a time in sweeps.
 
 `run!` blocks until every module is done; `start!` runs in the background
 and returns a `ProgressiveRun` to watch, `stop!` and `wait` on.
@@ -181,6 +184,7 @@ Base.@kwdef struct ProgressiveEngine <: Engine
     quantum::Float64 = 0.1
     step_size::Union{Nothing, Function} = nothing
     max_time::Float64 = Inf
+    workers::Int = Threads.nthreads()
 end
 
 """
@@ -313,22 +317,10 @@ finished(status::Symbol) = status in (:done, :failed, :cancelled)
 
 function schedule_modules!(engine::ProgressiveEngine, run::PipelineRun)
     state = setup_progressive!(run)
-    deadline = time() + engine.max_time
-
-    while !all(finished(m.status) for m in values(state.modules))
-        (@atomic state.stop_requested) && break
-        time() > deadline && break
-
-        for id in run.order
-            (@atomic state.stop_requested) && break
-            progress = state.modules[id]
-            finished(progress.status) && continue
-            advance!(engine, run, state, id, progress)
-        end
-
-        state.sweeps += 1
-        notify_observers(on_sweep, run, state.sweeps)
-        yield()  # let other tasks (viewers, input handlers) run between sweeps
+    if engine.workers <= 1
+        schedule_serial!(engine, run, state)
+    else
+        schedule_parallel!(engine, run, state)
     end
 
     if !isempty(state.failures)
@@ -339,37 +331,146 @@ function schedule_modules!(engine::ProgressiveEngine, run::PipelineRun)
     end
 end
 
-function advance!(engine::ProgressiveEngine, run::PipelineRun, state::ProgressiveState,
-                  id::Int, progress::ModuleProgress)
+all_finished(state::ProgressiveState) = all(finished(m.status) for m in values(state.modules))
+should_stop(state::ProgressiveState, deadline) = (@atomic state.stop_requested) || time() > deadline
+
+"""
+    next_action(state, progress) -> :step | :complete | :cancel | :none
+
+What a module needs now: a step (it has work), completion (its producers are
+done and it consumed everything), cancellation (a producer failed), or nothing
+(waiting for input).
+"""
+function next_action(state::ProgressiveState, progress::ModuleProgress)
     ctx = progress.context
     producer_status = [state.modules[p].status for p in ctx.producers]
-
-    # A failed producer cancels its consumers
-    if any(s -> s in (:failed, :cancelled), producer_status)
-        progress.status = :cancelled
-        return
-    end
+    any(s -> s in (:failed, :cancelled), producer_status) && return :cancel
     producers_done = all(==(:done), producer_status)
     changes = input_has_changes(ctx)
 
     if progress.style isa OneShot
         # Recompute when inputs changed (or never computed, once inputs exist)
-        if (progress.state === false || changes) && one_shot_inputs_available(ctx)
-            run_step!(engine, run, state, id, progress, () -> one_shot_step!(run, ctx, progress))
-        end
-        progress.status != :failed && producers_done && !input_has_changes(ctx) && progress.state === true &&
-            complete!(run, id, progress)
-        return
+        (progress.state === false || changes) && one_shot_inputs_available(ctx) && return :step
+        producers_done && !changes && progress.state === true && return :complete
+        return :none
     end
+    (progress.status == :ready || changes) && return :step
+    producers_done && return :complete
+    return :none
+end
 
-    if progress.status == :ready || changes
+function apply_action!(engine::ProgressiveEngine, run::PipelineRun, state::ProgressiveState,
+                       id::Int, progress::ModuleProgress, action::Symbol)
+    if action == :cancel
+        progress.status = :cancelled
+    elseif action == :complete
+        progress.style isa Progressive && finish!(progress.state, progress.context)
+        complete!(run, id, progress)
+    elseif action == :step
+        perform_step!(engine, run, state, id, progress)
+    end
+end
+
+function perform_step!(engine::ProgressiveEngine, run::PipelineRun, state::ProgressiveState,
+                       id::Int, progress::ModuleProgress)
+    ctx = progress.context
+    if progress.style isa OneShot
+        run_step!(engine, run, state, id, progress, () -> one_shot_step!(run, ctx, progress))
+    else
         budget = engine.step_size === nothing ?
             predict(progress.predictor, engine.quantum, default_step_size(ctx.mod.descriptor.module_type)) :
             max(1, Int(engine.step_size(id)))
         run_step!(engine, run, state, id, progress, () -> step!(progress.state, ctx, budget))
-    elseif producers_done && !changes
-        finish!(progress.state, ctx)
-        complete!(run, id, progress)
+    end
+end
+
+# Serial: sweeps in topological order, one step at a time
+function schedule_serial!(engine::ProgressiveEngine, run::PipelineRun, state::ProgressiveState)
+    deadline = time() + engine.max_time
+    while !all_finished(state) && !should_stop(state, deadline)
+        for id in run.order
+            should_stop(state, deadline) && break
+            progress = state.modules[id]
+            finished(progress.status) && continue
+            apply_action!(engine, run, state, id, progress, next_action(state, progress))
+        end
+        state.sweeps += 1
+        notify_observers(on_sweep, run, state.sweeps)
+        yield()  # let other tasks (viewers, input handlers) run between sweeps
+    end
+end
+
+# Parallel: steps of different modules run at the same time on worker
+# threads, at most `engine.workers` at once and never two of the same module.
+# A producer and its consumers may overlap: tables publish rows only after
+# writing them and their storage never moves (pipeline parallelism). When
+# more modules need a step than workers are free, the module that stepped
+# least recently goes first, so no module starves.
+function schedule_parallel!(engine::ProgressiveEngine, run::PipelineRun, state::ProgressiveState)
+    deadline = time() + engine.max_time
+    running = Set{Int}()
+    completed = Channel{Int}(Inf)
+    last_started = Dict(id => 0 for id in run.order)
+    clock = 0
+
+    function launch!(id, progress)
+        clock += 1
+        last_started[id] = clock
+        if thread_affinity(progress.context.mod.descriptor.module_type) == :main
+            perform_step!(engine, run, state, id, progress)   # on this task
+            return
+        end
+        push!(running, id)
+        Threads.@spawn try
+            perform_step!(engine, run, state, id, progress)
+        finally
+            put!(completed, id)
+        end
+    end
+
+    try
+        while true
+            stopping = should_stop(state, deadline)
+            started = false
+            if !stopping
+                candidates = Int[]
+                for id in run.order
+                    id in running && continue
+                    progress = state.modules[id]
+                    finished(progress.status) && continue
+                    action = next_action(state, progress)
+                    action == :step ? push!(candidates, id) :
+                        apply_action!(engine, run, state, id, progress, action)
+                end
+                sort!(candidates, by=id -> last_started[id])   # stable: ties in topological order
+                for id in candidates
+                    length(running) >= engine.workers && break
+                    launch!(id, state.modules[id])
+                    started = true
+                end
+                state.sweeps += 1
+                notify_observers(on_sweep, run, state.sweeps)
+            end
+
+            if isempty(running)
+                (stopping || all_finished(state)) && break
+                started || yield()
+                continue
+            end
+            # Wait for a step to finish (then everything that finished meanwhile)
+            if !started || length(running) >= engine.workers || stopping
+                delete!(running, take!(completed))
+            end
+            while isready(completed)
+                delete!(running, take!(completed))
+            end
+        end
+    catch
+        # Interrupted: let running steps finish before leaving
+        while !isempty(running)
+            delete!(running, take!(completed))
+        end
+        rethrow()
     end
 end
 
@@ -418,7 +519,7 @@ end
 
 function fail!(run::PipelineRun, state::ProgressiveState, id::Int, progress::ModuleProgress, e, bt)
     progress.status = :failed
-    push!(state.failures, (id, e, bt))
+    lock(() -> push!(state.failures, (id, e, bt)), run.lock)
     if progress.mod_exec !== nothing
         mark_failed!(progress.mod_exec, string(e))
         lock(() -> add_module_exec!(run.workflow_exec, progress.mod_exec), run.lock)

@@ -59,6 +59,16 @@ function Base.in(id::Integer, s::RowIds)
     return k <= length(s.ranges) && first(s.ranges[k]) <= id
 end
 
+function Base.collect(s::RowIds)
+    out = Vector{Int}(undef, length(s))
+    i = 0
+    for r in s.ranges
+        out[i+1:i+length(r)] = r
+        i += length(r)
+    end
+    return out
+end
+
 Base.first(s::RowIds) = first(first(s.ranges))
 Base.last(s::RowIds) = last(last(s.ranges))
 

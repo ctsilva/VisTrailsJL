@@ -24,7 +24,7 @@ function register_progressive_relational!()
         map=function (chunk, ctx)
             op, threshold = filter_predicate(ctx)
             values = chunk[Symbol(required_param(ctx, "column"))]
-            merge(chunk, (_keep=[op(v, threshold) for v in values],))
+            merge(chunk, (_keep=op.(values, threshold),))   # broadcast: compiled once per chunk
         end,
         parameters=[("column", String), ("op", String), ("value", Any)])
 

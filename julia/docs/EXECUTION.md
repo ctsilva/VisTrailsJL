@@ -22,9 +22,10 @@ as they are added; the design and the remaining phases are in
 | Progressive execution in time-bounded steps (`ProgressiveEngine`), background runs | Phase 3b | [Progressive execution](#progressive-execution) |
 | Progressive modules: sources, statistics, histograms, filter, select | Phase 3b | [Progressive modules](#progressive-modules) |
 | Writing progressive modules: folds, maps, or the step contract | Phase 3b | [Writing progressive modules](#writing-progressive-modules) |
+| Parallel progressive execution: modules, producer/consumer overlap, data-parallel folds | Phase 4 | [Parallel progressive execution](#parallel-progressive-execution) |
 
-Planned: parallel progressive execution (Phase 4), then live parameters,
-interactive priority and recording live edits in the version tree (Phase 5).
+Planned: live parameters, interactive priority and recording live edits in
+the version tree (Phase 5).
 
 ## Quick start
 
@@ -58,7 +59,7 @@ A `Pipeline` is a specification; an engine executes it.
 | `OneShotEngine()` | Computes every module once, in topological order. Default of `execute_pipeline` and `execute_notebook_pipeline`. |
 | `CachedEngine()` | Like one-shot, but reuses outputs whose [signature](#signatures) was computed before. Keep the same engine object across runs to benefit. Default of the high-level `execute`. |
 | `ParallelEngine(base; max_tasks)` | Runs independent modules concurrently on threads; each module is executed by `base` (`OneShotEngine()` by default, or a `CachedEngine`). See [Parallel execution](#parallel-execution). |
-| `ProgressiveEngine(; quantum, step_size, max_time)` | Runs progressive modules in bounded steps, publishing improving partial results. See [Progressive execution](#progressive-execution). |
+| `ProgressiveEngine(; quantum, step_size, max_time, workers)` | Runs progressive modules in bounded steps, publishing improving partial results, on `workers` threads. See [Progressive execution](#progressive-execution). |
 
 ```julia
 run!(engine, pipeline; observers=ExecutionObserver[], enable_logging=true) -> PipelineRun
@@ -234,8 +235,8 @@ such modules; from another task the run fails with an error saying so.
 improve: progressive modules process their inputs in bounded **steps**, each
 sized to take about `quantum` seconds, and publish their current result
 after each step. A pipeline over 20 M rows shows its first filtered count
-after ~15-40 ms; the complete results take as long as with the one-shot
-engine (6.1 s vs 6.2 s, `benchmarks/progressive_engine.jl`).
+after a few milliseconds; the complete results take about as long as with
+the one-shot engine (see [the measurements](#parallel-progressive-execution)).
 
 ```julia
 p = Pipeline()
@@ -276,12 +277,15 @@ receive `on_module_step(obs, run, mod, result, seconds)` after each step and
 
 ### How it runs
 
-- The scheduler **sweeps** the modules in topological order. A module runs
-  a step when it has work: new input changes, or more to produce (a
-  source). It is skipped when blocked.
+- A module runs a step when it has work: new input changes, or more to
+  produce (a source); otherwise it is blocked. With `workers = 1` the
+  scheduler **sweeps** the modules in topological order, one step at a
+  time; with more workers, steps of different modules run in parallel (see
+  [below](#parallel-progressive-execution)).
 - **Step sizes** come from a time predictor: items per second over the
-  module's last 7 steps, times `quantum` (default 0.1 s). The first step of
-  each module is ignored, since it includes JIT compilation; until data
+  module's last 7 steps, times `quantum` (default 0.1 s). Each module's
+  first step that processes items is ignored, since it includes JIT
+  compilation; empty steps are ignored too. Until data
   exists, a module's `default_step_size` is used. `step_size=id -> n`
   forces sizes (for tests).
 - **Termination by propagation**: a module is done when it says so (a
@@ -313,6 +317,49 @@ the same pipeline gives the same final results everywhere.
 
 Early results are prefixes of the input in arrival order, not samples: a
 file sorted by time shows its first rows first.
+
+### Parallel progressive execution
+
+With `workers > 1` (default: `Threads.nthreads()`; start Julia with
+`--threads=auto`), three kinds of parallelism combine:
+
+- **Task parallelism**: steps of independent modules run at the same time.
+- **Pipeline parallelism**: a producer and its consumers run at the same
+  time; consumers read the rows already published while the producer
+  appends more. This is safe because tables publish rows only after
+  writing them and their storage never moves (ProgressiVis has to keep
+  connected modules apart instead).
+- **Data parallelism**: folds that define `merge` split each step's rows
+  into blocks of 16 384 rows, fold them on several threads and merge the
+  partial results in block order (all the statistics modules do).
+
+Rules: at most `workers` steps run at once; two steps of the same module
+never do; when more modules need a step than workers are free, the module
+that stepped least recently goes first; modules with
+`thread_affinity(T) == :main` (Python, plotting) step on the scheduler's
+task, which must run on the main thread.
+
+Determinism: final results are the same with any number of workers (to
+rounding for mean and variance, since step boundaries depend on timing).
+With `workers = 1`, they are bit-identical whatever the number of threads,
+because fold blocks do not depend on it. Intermediate results in parallel
+runs depend on timing: a one-shot module downstream of a progressive one
+may see more or fewer intermediate values.
+
+Measured with `benchmarks/progressive_engine.jl` (Apple M5, 10 cores;
+RandomTable of 20 M rows → Min, Mean, Var, Histogram1D, Histogram2D
+256×256, Filter → Count):
+
+| Julia threads | engine | first filtered count | complete |
+|--------------:|--------|---------------------:|---------:|
+| 1 | one-shot | — | 2.98 s |
+| 1 | progressive, 1 worker | 13-39 ms | 3.0-3.3 s |
+| 8 | one-shot (data-parallel folds) | — | 1.09 s |
+| 8 | progressive, 1 worker | 5-35 ms | 1.0-1.15 s |
+| 8 | progressive, 8 workers | < 1 ms | 0.86-0.89 s |
+
+The source draws its random numbers sequentially (0.45 s for 20 M rows),
+which bounds the speedup of this pipeline.
 
 ### Progressive modules
 
@@ -445,7 +492,8 @@ Tables.columntable(t)     # a Tables.jl snapshot of the live rows (works with Da
   `last_id`, column lengths and subscriptions) only once every column holds
   their values.
 - **Bulk reads**: `segment_views(column(t, :x), range)` returns contiguous
-  views covering a range of ids, e.g. `sum(sum, segment_views(col, r))`.
+  views covering a range of ids, e.g. `sum(sum, segment_views(col, r))`;
+  `t[ids, :x]` copies values through them.
 
 ### Subscriptions
 
@@ -582,6 +630,13 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 
 ## Changelog
 
+- **Phase 4 (2026-10-13)**: parallel progressive scheduler
+  (`ProgressiveEngine(workers=N)`: task and pipeline parallelism, one step
+  per module at a time, least-recently-stepped first, main-thread modules on
+  the scheduler task); data-parallel folds (`merge` in
+  `define_fold_module!`, used by all statistics modules); the time
+  predictor skips the first non-empty step; faster maps and table reads
+  (Filter pipeline 3.6 s → 0.87 s for 20 M rows).
 - **Phase 3b (2026-10-13)**: `ProgressiveEngine` (sweeps, time predictor,
   termination by propagation, isolated failures, `start!`/`stop!`/`wait`),
   one-shot modules in progressive runs and progressive modules in one-shot

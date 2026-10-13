@@ -1,11 +1,12 @@
 """
 Benchmark: progressive vs one-shot execution
 
-    julia --project=. benchmarks/progressive_engine.jl [rows]
+    julia --project=. --threads=N benchmarks/progressive_engine.jl [rows]
 
 RandomTable (x, y) → Min, Mean, Var, Histogram1D, Histogram2D, and
 Filter(y < 0.3) → Count. Reports when the first partial results appear,
-the total time, and the one-shot time for the same pipeline.
+the total time with 1 worker and with every thread (`--threads=N`), and the
+one-shot time for the same pipeline.
 """
 
 include(joinpath(@__DIR__, "..", "src", "VisTrailsJL.jl"))
@@ -50,14 +51,15 @@ let (p, _) = pipeline_(200_000)
 end
 
 p, count = pipeline_(rows)
-for quantum in (0.05, 0.1)
+println("Threads: $(Threads.nthreads())")
+for workers in unique((1, Threads.nthreads())), quantum in (0.05, 0.1)
     first = Ref(NaN)
     t0 = time()
-    run = run!(ProgressiveEngine(quantum=quantum), p; observers=[FirstResult(count.id, t0, first)],
-               enable_logging=false)
+    run = run!(ProgressiveEngine(quantum=quantum, workers=workers), p;
+               observers=[FirstResult(count.id, t0, first)], enable_logging=false)
     total = time() - t0
-    @printf("progressive (quantum %.2f s): first filtered count after %.3f s, done in %.2f s, %d sweeps\n",
-            quantum, first[], total, run.engine_state.sweeps)
+    @printf("progressive (%d workers, quantum %.2f s): first filtered count after %.3f s, done in %.2f s\n",
+            workers, quantum, first[], total)
 end
 t = @elapsed run!(OneShotEngine(), p; enable_logging=false)
 @printf("one-shot: %.2f s (%d rows)\n", t, rows)

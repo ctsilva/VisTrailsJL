@@ -1,6 +1,6 @@
 # Progressive Execution Plan for VisTrailsJL
 
-Status: Phases 0-3 done (branch `progressive-engine`). Started 2026-10-13.
+Status: Phases 0-4 done (branch `progressive-engine`). Started 2026-10-13.
 
 ## Goal
 
@@ -261,3 +261,38 @@ Import its module catalog as descriptors, or drive it as an external engine.
   ranges (no rebinning from upstream Min/Max yet); `CSVLoader` does not
   support quoted newlines; the `#| engine:` notebook directive is not
   implemented yet (pass `engine=` to `execute_notebook_pipeline`).
+- 2026-10-13: Phase 4 done. `ProgressiveEngine(workers=N)` (default
+  `Threads.nthreads()`): `schedule_parallel!` runs steps of different
+  modules on worker threads, at most `workers` at once and never two of the
+  same module; producers and consumers overlap (pipeline parallelism needs
+  no exclusion rule thanks to the 3a storage: unlike ProgressiVis, connected
+  modules may run together); `next_action` separates deciding from doing;
+  fairness: least recently stepped first (a rotating scan start starved
+  modules). `:main` modules step on the scheduler task. Data parallelism:
+  `define_fold_module!(...; merge)` folds fixed 16 384-row blocks on threads
+  and merges in block order, so results do not depend on the thread count
+  (checked bit-for-bit across 1- and 4-thread processes). Time predictor now
+  skips the first *non-empty* step (an empty first step did not include
+  compilation). Tests: `test/progressive/test_parallel_progressive.jl`
+  (results vs workers, prefix consistency during overlap, producer/consumer
+  overlap, per-module exclusivity — removing that rule crashes the process —,
+  data-parallel blocks, cross-process determinism, main-thread modules,
+  failures and stop). Suite 27/27.
+
+  Performance work, found while benchmarking (the source was suspected but
+  takes only 0.45 s of 6 s): `Filter` gathered rows element by element,
+  mapped ids through a `Dict`, called its comparison through an untyped
+  function and recorded outputs in a type-unstable loop. Now: bulk copies
+  through segment views, a dense id vector, broadcasting, a function
+  barrier, a range-based `collect(::RowIds)`. Benchmark (20 M rows, 7
+  modules): 1 thread 6.2 s → 3.0 s; 8 threads 0.86 s with 8 workers (3.5×
+  over 1 thread; the sequential source bounds it).
+
+  Lesson: a test asserting that a one-shot consumer sees intermediate
+  results holds only serially; in parallel it depends on timing (and on JIT
+  compilation of the producer's first real step). Pinned to `workers=1`.
+
+  Open points: the scheduler polls (`yield`) when nothing runs but work is
+  pending; no back-pressure (a fast producer can run far ahead of slow
+  consumers); interactive priority (Phase 5) is not there yet, so an input
+  change waits for running steps like any other work.
