@@ -52,6 +52,14 @@ const TEST_SUITES = Dict(
             "test_workflow_rendering.jl"
         ]
     ),
+    "progressive" => Dict(
+        "name" => "Progressive Execution Tests",
+        "path" => "progressive",
+        "threads" => 4,
+        "tests" => [
+            "test_data_layer.jl"
+        ]
+    ),
     "execution" => Dict(
         "name" => "Execution Tests",
         "path" => "execution",

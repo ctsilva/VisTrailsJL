@@ -18,10 +18,11 @@ as they are added; the design and the remaining phases are in
 | Cache use recorded in provenance | Phase 1 | [Provenance](#provenance) |
 | Parallel execution of independent modules (`ParallelEngine`) | Phase 2 | [Parallel execution](#parallel-execution) |
 | Thread affinity for Python and plotting modules | Phase 2 | [Parallel execution](#thread-affinity) |
+| Change-tracked containers: `ProgressiveTable`, `ProgressiveDict`, `ProgressiveValue` | Phase 3a | [Progressive data](#progressive-data) |
 
-Planned: progressive execution of modules in bounded steps over growing
-tables (Phase 3), then parallel progressive execution, live parameters and
-recording live edits in the version tree (Phases 4-5).
+Planned: the progressive engine that runs modules in bounded steps over
+these containers (Phase 3b), then parallel progressive execution, live
+parameters and recording live edits in the version tree (Phases 4-5).
 
 ## Quick start
 
@@ -224,6 +225,112 @@ such modules; from another task the run fails with an error saying so.
 - Observer callbacks are called one at a time (under the run's lock), so
   observers need no synchronization of their own.
 
+## Progressive data
+
+Progressive modules (Phase 3b, not yet available) will exchange data
+through containers that report what changed, so each consumer processes
+only new, updated or deleted items, in bounded chunks. The containers are
+usable on their own today. They correspond to ProgressiVis' `PTable`,
+`PDict` and `PIntSet`.
+
+### ProgressiveTable
+
+A columnar table that grows by appending rows.
+
+```julia
+t = ProgressiveTable(:x => Float64, :y => Int)        # or ProgressiveTable(namedtuple_or_any_Tables_table)
+ids = append!(t, (x=rand(1000), y=rand(1:9, 1000)))   # new row ids (1:1000)
+push!(t, (x=0.5, y=3))                                # one row; returns its id
+
+t[5, :x]                  # a value
+column(t, :x)             # the column, indexed by row id (AbstractVector)
+t[RowIds([1, 5, 9]), :y]  # values at several ids
+t[5, :x] = 1.0            # update
+delete!(t, 10:20)         # delete rows (an id, a range or RowIds)
+row_ids(t), length(t)     # live rows
+Tables.columntable(t)     # a Tables.jl snapshot of the live rows (works with DataFrames, CSV, ...)
+```
+
+- Row ids start at 1, are positions in the columns, and are never reused;
+  deleted rows keep their slot.
+- **Storage never moves.** Columns are stored in fixed-size segments
+  (`segment_size`, default 65 536 rows). A segment is never reallocated, so
+  a consumer can read while the producer appends.
+- **Rows are published after they are written**: they become visible (in
+  `last_id`, column lengths and subscriptions) only once every column holds
+  their values.
+- **Bulk reads**: `segment_views(column(t, :x), range)` returns contiguous
+  views covering a range of ids, e.g. `sum(sum, segment_views(col, r))`.
+
+### Subscriptions
+
+Each consumer subscribes and reads the changes since its own last read, at
+its own pace:
+
+```julia
+sub = subscribe!(t)            # rows already in t are reported as created
+pending(sub)                   # (created=…, updated=…, deleted=…)
+ids = next_created!(sub, 10_000)   # up to 10 000 new row ids, smallest first (a RowIds)
+for r in ranges(ids), v in segment_views(column(t, :x), r)
+    # process v
+end
+next_updated!(sub); next_deleted!(sub)
+has_changes(sub)
+reset!(sub)                    # forget pending changes; re-read everything as created
+unsubscribe!(sub)
+```
+
+Changes a consumer has not read yet are combined: a row created and then
+updated is reported once, as created; a row created and then deleted is not
+reported at all; a row read, updated and then deleted is reported as deleted.
+
+`RowIds` is a set of ids stored as sorted ranges (one range for a run of
+appends): `add!`, `remove!`, `union!`, `setdiff!`, `intersect`,
+`take_first!`, `in`, iteration, `ranges`.
+
+### ProgressiveDict and ProgressiveValue
+
+`ProgressiveDict{K,V}` is a dictionary for small keyed results (min/max per
+column, query bounds). Its subscriptions report created, updated and
+deleted keys with `take_changes!(sub)`. Writing a value equal (`isequal`)
+to the current one is not a change.
+
+```julia
+d = ProgressiveDict{Symbol, Float64}()
+sub = subscribe!(d)
+d[:max] = 3.0
+take_changes!(sub)      # (created=Set([:max]), updated=Set(), deleted=Set())
+snapshot(d)             # a Dict copy
+```
+
+`ProgressiveValue{T}` wraps any value; its only change is "replaced"
+(`set!`). It lets ordinary values (a figure, a model) take part in a
+progressive pipeline:
+
+```julia
+pv = ProgressiveValue{String}()
+sub = subscribe!(pv)
+set!(pv, "hello")
+has_changes(sub)        # true
+take_value!(sub)        # "hello"; has_changes(sub) is now false
+current_value(pv)
+```
+
+### Threads
+
+One producer writes a container while any number of consumers, on other
+threads, read published rows and use their subscriptions. Writes and
+subscription operations take the container's lock; reading published
+values does not.
+
+### Performance
+
+On an Apple M5, single-threaded, two `Float64` columns: appending runs at
+90-330 M rows/s (chunks of 10 000 to 100 000 rows); taking new ids and
+summing a column through `segment_views` at 1.5-2 G rows/s. Reading
+element by element (`col[id]`) is about 30 M rows/s: use segment views in
+hot loops.
+
 ## Observers
 
 Observers receive events during a run. Subtype `ExecutionObserver` and
@@ -290,6 +397,11 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 
 ## Changelog
 
+- **Phase 3a (2026-10-13)**: progressive data layer: `ProgressiveTable`
+  (segmented columns that never move, publish-after-write, Tables.jl),
+  `RowIds`, `ProgressiveDict`, `ProgressiveValue`, subscriptions
+  (`subscribe!`, `next_created!`/`next_updated!`/`next_deleted!`,
+  `take_changes!`, `take_value!`, `reset!`), `segment_views`.
 - **Phase 2 (2026-10-13)**: `ParallelEngine` (dependency-driven task
   scheduling on threads, composable with `CachedEngine`), `thread_affinity`
   (`:main` for Python and plotting modules), failure contract (stop

@@ -1,6 +1,6 @@
 # Progressive Execution Plan for VisTrailsJL
 
-Status: Phases 0-2 done (branch `progressive-engine`). Started 2026-10-13.
+Status: Phases 0-2 and 3a done (branch `progressive-engine`). Started 2026-10-13.
 
 ## Goal
 
@@ -99,7 +99,7 @@ timings, and standard modules should be precompiled (PrecompileTools).
 - **Exit:** speedup with `-t N` on a synthetic wide pipeline; results equal
   to `OneShotEngine`.
 
-### Phase 3 — progressive engine
+### Phase 3 — progressive engine (3a: data layer, 3b: engine)
 - **Data:** `ProgressiveTable` (segmented columns, row ids, deletion set),
   change log with per-consumer bookmarks (fast path: id ranges for
   appends), Tables.jl interface. `ProgressiveValue` for general types (only
@@ -202,3 +202,25 @@ Import its module catalog as descriptors, or drive it as an external engine.
   `PipelineRun`). JuliaSource and notebook modules run on worker threads
   (they `eval` code; fine for self-contained code, not for code that
   defines globals). A failure cannot interrupt a running module.
+- 2026-10-13: Phase 3a done (data layer, `src/core/progressive/`).
+  `RowIds` (sorted disjoint ranges; named to avoid `Base.IdSet`);
+  `ProgressiveTable` with `SegmentedColumn`s (fixed-size segments, the
+  segment list replaced copy-on-grow and loaded atomically; rows published
+  after all columns are written); per-consumer subscriptions filled at write
+  time instead of a shared log with bookmarks (same semantics: combined
+  created/updated/deleted per consumer, first read reports all rows as
+  created); `ProgressiveDict` (changes recorded on write, equal values are
+  not changes); `ProgressiveValue` (version counter); Tables.jl interface;
+  `segment_views` for bulk reads. Tests: `test/progressive/test_data_layer.jl`
+  (randomized RowIds-vs-Set oracle, a consumer mirroring a table through
+  its changes under random appends/updates/deletes and random read sizes,
+  a concurrent producer/consumer on two threads; sabotaging the publish
+  order makes that test fail); new "progressive" suite, 24/24.
+  Measured: append 90-330 M rows/s, consume + sum via segment views
+  1.5-2 G rows/s, element-wise reads ~30 M rows/s.
+
+  Open points: updates of a published value by the producer while a
+  consumer reads it are not synchronized (fine for isbits values written
+  atomically by the hardware, not for others); no back-pressure (a slow
+  consumer's buffers grow, as in ProgressiVis); `ProgressiveDict`
+  iteration is not synchronized (use `snapshot`).
