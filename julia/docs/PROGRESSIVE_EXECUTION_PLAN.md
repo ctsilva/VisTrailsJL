@@ -386,3 +386,32 @@ Import its module catalog as descriptors, or drive it as an external engine.
   selection), so they stayed ready and stepped ~2 500 times/s each while
   idle. Any module with an input it reads but does not consume has this
   problem; an engine-level option for unsubscribed inputs would prevent it.
+- 2026-10-13: Convergence (step 3 of the accuracy plan below). Modules
+  report `converged(state)` (true/false/nothing), evaluated after each
+  step on the stepping thread and stored in `ModuleProgress.converged`.
+  Each sweep computes demand over the consumer graph (memoized in a
+  `Sweep`); a module ready on its own (no input changes) with no demand is
+  paused; input-driven steps always run, which is how a query or view
+  change reaches the converged modules, resets them and resumes the
+  sources. Paused sets are replaced per sweep, never mutated, so other
+  threads can read `is_paused`. When nothing can progress and inputs are
+  closed, paused modules complete (`converged` annotation); otherwise the
+  scheduler idles on its event channel. Tests:
+  `test/progressive/test_convergence.jl` (43); suite 29/29 +1 file, run
+  twice.
+
+  Year data (step 2): `prepare_data.jl --year` reads the 24 monthly CSVs
+  (trip and fare rows checked to correspond), 173,179,759 trips in a
+  fixed-seed random order, 10.7 GB Arrow, 8.5 min, 10 GB peak. On January
+  the CSV path gives exactly the kdtrip path's values (every column equal
+  as a multiset).
+
+  Open points: in parallel, the pipeline in flight overshoots a converged
+  module's need by a few steps (measured 16 K rows for a 10 K need with 4
+  workers and 1 000-row steps); `converged` is not consulted for one-shot
+  modules.
+
+  Plan for accuracy in TaxiVis (step 4): `TripHistogram` reports
+  `converged` when more data would not visibly change its display (e.g.
+  99% of non-empty bins with a 95% interval within one color level); the
+  page shows estimated counts (count × N/n) and the share of trips read.

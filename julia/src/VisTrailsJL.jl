@@ -76,7 +76,7 @@ export next_created!, next_updated!, next_deleted!, take_changes!, take_value!
 # Progressive engine exports
 export ProgressiveEngine, ProgressiveRun, start!, stop!, module_status, module_steps
 export set_variable!, close_inputs!, is_input_module, on_interaction, on_interaction_done
-export ProgressiveStateCache, restart!, progress, module_progress
+export ProgressiveStateCache, restart!, progress, module_progress, converged, module_converged, is_paused
 export ExecutionHistory, export_execution_history, execution_history_json, VersionRecorder
 export add_version!
 export ExecutionStyle, OneShot, Progressive, execution_style, StepResult, StepContext

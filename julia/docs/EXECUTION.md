@@ -28,6 +28,7 @@ as they are added; the design and the remaining phases are in
 | Progress of partial results in provenance; execution history for ProgressiVis' viewer | Phase 5b | [Provenance of progressive runs](#provenance-of-progressive-runs) |
 | Live input changes recorded as versions (`VersionRecorder`) | Phase 5b | [Provenance of progressive runs](#provenance-of-progressive-runs) |
 | Arrow source (`ArrowLoader`), reads at arbitrary row ids (`gather`); example: progressive TaxiVis | TaxiVis | [Progressive modules](#progressive-modules) |
+| Convergence: sources load only while a result downstream needs more data (`converged`), and resume when one does again | TaxiVis | [Convergence](#convergence) |
 
 ## Quick start
 
@@ -419,6 +420,48 @@ Measured (8 threads, Apple M5) while a 1-billion-row branch with `Var` and a
 `Count` branch over 300 000 rows has caught up in 1.5-2.5 ms (8 workers;
 2-6 ms with 1 worker), over 3 million rows in 10-95 ms.
 
+### Convergence
+
+A progressive result is often good enough long before all the data is
+read: a histogram drawn with 256 color levels stops changing visibly, an
+estimate's confidence interval gets narrow enough. A module says so with
+
+```julia
+VisTrailsJL.converged(s::MyState) = s.rows >= 10_000   # true, false, or nothing
+```
+
+`true`: converged; `false`: needs more data; `nothing` (the default): no
+opinion, it needs what its consumers need. The engine calls it after every
+step of the module (on the thread that ran the step) and at setup.
+
+A module **wants data** unless it is finished or converged; a module
+without an opinion wants data if it has no consumers or one of its
+consumers wants data. A module that would step only because it is `:ready`
+on its own (a source, or work left over), not because its inputs changed,
+steps only while it wants data; otherwise it is **paused**. Modules whose
+inputs changed always step, so an interaction reaches the modules that
+consume it, and if they no longer converge (a new query, a zoom) the
+sources resume.
+
+- `run!`: once nothing can progress and the paused modules are all that
+  is left, they complete (annotated `converged` in the execution log) and
+  their consumers finish by propagation. The run read only the data its
+  results needed.
+- `start!`: paused sources wait (no steps, no CPU) for an input that makes
+  a module downstream want data again.
+- `module_converged(run, id)`, `is_paused(run, id)`: a module's last answer,
+  and whether the last sweep paused it.
+- Without modules that implement `converged`, behavior is unchanged: every
+  leaf wants all the data.
+- With several workers, a source and the modules between it and a
+  converged module may run a few steps ahead while it catches up (the
+  pipeline in flight); those rows are then consumed.
+
+Tests: `test/progressive/test_convergence.jl` (a source stops when its
+consumer converged, the most demanding consumer decides, leaves without an
+opinion want everything, through a filter, a live input resumes a paused
+source and no steps happen while paused; 1 and 4 workers).
+
 ### Edits during a run
 
 Give the engine a `ProgressiveStateCache` and every module's progressive
@@ -585,7 +628,9 @@ end
 and register it with a `ModuleDescriptor` as usual. `StepResult` status:
 `:ready` (more work now), `:blocked` (waiting for input) or `:done`
 (finished; sources). Optional: `finish!(state, ctx)` when the module is
-done, `default_step_size(::Type{MyModule})` for the first steps. A module
+done, `default_step_size(::Type{MyModule})` for the first steps,
+`progress(state)` for provenance, `converged(state)` to stop loading once
+its result is good enough ([Convergence](#convergence)). A module
 without inputs must not return `:blocked` (it would be considered done).
 
 ## Progressive data
@@ -761,6 +806,10 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 
 ## Changelog
 
+- **Convergence (2026-10-13)**: `converged(state)` hook; sources and
+  modules with work left over step only while a module downstream wants
+  data, and resume when one does again; `run!` completes paused modules
+  (annotated `converged`); `module_converged`, `is_paused`.
 - **TaxiVis (2026-10-13)**: `ArrowLoader` progressive source (with
   `throttle` and `rate`, to watch a fast source load), `gather`;
   example `examples/taxivis/` (port of ProgressiVis' progressive TaxiVis:

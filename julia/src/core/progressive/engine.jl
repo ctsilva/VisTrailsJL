@@ -228,6 +228,7 @@ mutable struct ModuleProgress
     items::Int
     started::Bool
     mod_exec::Union{ModuleExec, Nothing}
+    converged::Union{Nothing, Bool}   # converged(state) after the last step (see `converged`)
 end
 
 """
@@ -244,6 +245,9 @@ mutable struct ProgressiveState
     events::Channel{Int}                    # step completions (module id) and wake-ups (0)
     interactive::Set{Int}                   # modules downstream of a recent input change
     interaction_start::Float64
+    consumers::Dict{Int, Vector{Int}}       # modules reading each module's outputs
+    paused::Set{Int}                        # ready modules no one downstream needed (last sweep;
+                                            # replaced, never mutated, so other threads may read it)
 end
 
 # Wake the scheduler (an input value, stop!, close_inputs!)
@@ -399,7 +403,10 @@ function setup_progressive!(run::PipelineRun, engine=nothing)
     run.engine_state isa ProgressiveState && return run.engine_state
     cache = engine === nothing ? nothing : engine.state_cache
     state = ProgressiveState(Dict{Int, ModuleProgress}(), 0, false, Tuple{Int, Any, Any}[],
-                             false, Channel{Int}(Inf), Set{Int}(), 0.0)
+                             false, Channel{Int}(Inf), Set{Int}(), 0.0,
+                             Dict(id => unique!([c.dest_module_id for c in get_connections_from(run.pipeline, id)])
+                                  for id in run.order),
+                             Set{Int}())
     run.engine_state = state
 
     for id in run.order
@@ -446,7 +453,8 @@ function setup_progressive!(run::PipelineRun, engine=nothing)
             false  # not computed yet
         end
         state.modules[id] = ModuleProgress(:ready, style, module_state, ctx, StepPredictor(),
-                                           0, 0, false, nothing)
+                                           0, 0, false, nothing,
+                                           style isa Progressive ? converged(module_state) : nothing)
     end
     return state
 end
@@ -486,7 +494,7 @@ What a module needs now: a step (it has work), completion (its producers are
 done and it consumed everything), cancellation (a producer failed), or nothing
 (waiting for input).
 """
-function next_action(state::ProgressiveState, progress::ModuleProgress)
+function next_action(state::ProgressiveState, progress::ModuleProgress, sweep=nothing)
     ctx = progress.context
     producer_status = [state.modules[p].status for p in ctx.producers]
     any(s -> s in (:failed, :cancelled), producer_status) && return :cancel
@@ -501,12 +509,69 @@ function next_action(state::ProgressiveState, progress::ModuleProgress)
         producers_done && !changes && (progress.state === true || !available) && return :complete
         return :none
     end
-    (progress.status == :ready || changes) && return :step
+    changes && return :step
+    if progress.status == :ready
+        # Ready on its own (a source, or work left over): only if someone needs it
+        (sweep === nothing || wants_data!(sweep, state, ctx.mod.id)) && return :step
+        push!(sweep.paused, ctx.mod.id)
+        return :none
+    end
     if is_input_module(ctx.mod.descriptor.module_type) && (@atomic state.inputs_open)
         return :none
     end
     producers_done && return :complete
     return :none
+end
+
+# What one sweep learned: which modules want data (memoized), which were paused
+struct Sweep
+    demand::Dict{Int, Bool}
+    paused::Set{Int}
+end
+Sweep() = Sweep(Dict{Int, Bool}(), Set{Int}())
+
+"""
+    wants_data!(sweep, state, id) -> Bool
+
+Whether module `id` needs more data: not if it is finished or has converged
+(`converged(state) == true`); yes if it has not converged (`false`); with
+no opinion (`nothing`), yes if it has no consumers or one of its consumers
+wants data. The sweep memoizes the answers.
+"""
+function wants_data!(sweep::Sweep, state::ProgressiveState, id::Int)
+    demand = sweep.demand
+    haskey(demand, id) && return demand[id]
+    demand[id] = true   # provisional (the graph is acyclic)
+    p = state.modules[id]
+    answer = if finished(p.status) || p.converged === true
+        false
+    elseif p.converged === false
+        true
+    else
+        consumers = state.consumers[id]
+        isempty(consumers) || any(c -> wants_data!(sweep, state, c), consumers)
+    end
+    return demand[id] = answer
+end
+
+# End of a sweep: publish the modules it paused
+end_sweep!(state::ProgressiveState, sweep::Sweep) = (state.paused = sweep.paused; state)
+
+# Nothing can progress and no input can change that: modules paused because
+# everything downstream converged are complete (their consumers then finish
+# by propagation). Returns whether any was completed.
+function complete_converged!(run::PipelineRun, state::ProgressiveState)
+    ((@atomic state.inputs_open) || isempty(state.paused)) && return false
+    for id in run.order
+        id in state.paused || continue
+        progress = state.modules[id]
+        finished(progress.status) && continue
+        progress.mod_exec === nothing || (progress.mod_exec.annotations["converged"] = "true")
+        finish!(progress.state, progress.context)
+        complete!(run, id, progress)
+    end
+    state.paused = Set{Int}()
+    return true
 end
 
 function apply_action!(engine::ProgressiveEngine, run::PipelineRun, state::ProgressiveState,
@@ -543,6 +608,7 @@ function schedule_serial!(engine::ProgressiveEngine, run::PipelineRun, state::Pr
     while !all_finished(state) && !should_stop(state, deadline)
         selection = interactive_selection(run, state)
         progressed = false
+        sweep = Sweep()
         for id in run.order
             should_stop(state, deadline) && break
             # Re-read: an input may change during the sweep (a step can yield)
@@ -550,17 +616,19 @@ function schedule_serial!(engine::ProgressiveEngine, run::PipelineRun, state::Pr
             isempty(selection) || id in selection || continue
             progress = state.modules[id]
             finished(progress.status) && continue
-            action = next_action(state, progress)
+            action = next_action(state, progress, sweep)
             action == :none && continue
             apply_action!(engine, run, state, id, progress, action)
             progressed = true
+            empty!(sweep.demand)   # a step may change what has converged
         end
+        end_sweep!(state, sweep)
         state.sweeps += 1
         notify_observers(on_sweep, run, state.sweeps)
         if !isempty(selection) && !progressed
             end_interaction!(run, state)      # the interactive modules caught up
         elseif !progressed
-            idle!(state)
+            complete_converged!(run, state) || idle!(state)
         else
             yield()  # let other tasks (viewers, input handlers) run between sweeps
         end
@@ -621,14 +689,16 @@ function schedule_parallel!(engine::ProgressiveEngine, run::PipelineRun, state::
             started = false
             if !stopping
                 candidates = Int[]
+                sweep = Sweep()
                 for id in run.order
                     id in running && continue
                     progress = state.modules[id]
                     finished(progress.status) && continue
-                    action = next_action(state, progress)
+                    action = next_action(state, progress, sweep)
                     action == :step ? push!(candidates, id) :
                         apply_action!(engine, run, state, id, progress, action)
                 end
+                end_sweep!(state, sweep)
                 selection = interactive_selection(run, state)
                 if !isempty(selection)
                     if !any(in(selection), candidates) && !any(in(selection), running)
@@ -654,7 +724,7 @@ function schedule_parallel!(engine::ProgressiveEngine, run::PipelineRun, state::
 
             if isempty(running)
                 (stopping || all_finished(state)) && break
-                started || idle!(state)
+                started || complete_converged!(run, state) || idle!(state)
                 continue
             end
             # Wait for a step to finish or a wake-up (then take everything pending)
@@ -695,6 +765,7 @@ function run_step!(engine, run::PipelineRun, state::ProgressiveState, id::Int,
 
     progress.steps += 1
     progress.items += result.items
+    progress.style isa Progressive && (progress.converged = converged(progress.state))
     record!(progress.predictor, result.items, seconds)
     notify_observers(on_module_step, run, mod, result, seconds)
 
@@ -909,6 +980,31 @@ produced, rows consumed of those available, bytes read), or `nothing` if
 unknown. Module types may extend it.
 """
 progress(state) = nothing
+
+"""
+    converged(state) -> Union{Nothing, Bool}
+
+Whether a progressive module's result is good enough (e.g. a display that
+more data would not visibly change): `true` (converged), `false` (needs
+more data), or `nothing` (no opinion, the default: it needs what its
+consumers need). Called after each step, on the stepping thread. Modules
+upstream that are ready only to produce more (sources, work left over) step
+only while some module downstream wants data, so a run can stop loading
+once its displays converged and resume when one no longer has (a new
+query, a zoom); `run!` then completes the paused modules. Module types may
+extend it.
+"""
+converged(state) = nothing
+
+"""
+    module_converged(run, id) -> Union{Nothing, Bool}
+    is_paused(run, id) -> Bool
+
+A module's last `converged` answer; whether it was paused in the last sweep
+because no module downstream wanted data.
+"""
+module_converged(run::PipelineRun, id::Int) = run.engine_state.modules[id].converged
+is_paused(run::PipelineRun, id::Int) = id in run.engine_state.paused
 
 """
     module_progress(run::PipelineRun, id) -> Union{Nothing, Tuple{Int, Int}}
