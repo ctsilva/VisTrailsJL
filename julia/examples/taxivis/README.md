@@ -26,6 +26,10 @@ From the repository root:
 # once: write julia/examples/taxivis/data/taxivis_2013_01_stratified.arrow (874 MB)
 julia --project=julia --threads=auto julia/examples/taxivis/prepare_data.jl
 
+# or the whole year from the raw CSVs (Tripdata_2013, Faredata_2013):
+# data/taxivis_2013_random.arrow, 173 M trips in random order (10.7 GB, ~9 min, 10 GB of memory)
+julia --project=julia --threads=auto julia/examples/taxivis/prepare_data.jl --year
+
 # start the dataflow and the local server
 julia --project=julia --threads=auto julia/examples/taxivis/app.jl
 
@@ -89,7 +93,7 @@ filters, 8 map, 15 attribute and 8 neighborhood histograms.
 
 | File | Purpose |
 | --- | --- |
-| `prepare_data.jl` | trips in stratified order to Arrow, same rows, order and columns as ProgressiVis' `prepare_data.py` |
+| `prepare_data.jl` | January in stratified order to Arrow (same rows, order and columns as ProgressiVis' `prepare_data.py`); `--year`: the whole year from the CSVs, in random order |
 | `regions.jl` | reads the neighborhoods; neighborhood of points by ray casting (same arithmetic as `regions.py`) |
 | `data/neighborhoods.txt` | 132 NYC neighborhoods, from TaxiVis (Copyright (c) 2013-2015, New York University, BSD license) |
 | `dataflow.jl` | query validation, `TripFilter` and `TripHistogram` modules, the pipeline |

@@ -1,8 +1,10 @@
 """
-Write the January 2013 FOIL trips in stratified order to an Arrow file, for TaxiVis.
+Write the 2013 FOIL trips to an Arrow file, for TaxiVis.
 
     julia --project=julia --threads=auto julia/examples/taxivis/prepare_data.jl [--rows N]
+    julia --project=julia --threads=auto julia/examples/taxivis/prepare_data.jl --year [--months 1-12] [--rows N]
 
+January (default):
 Reads TaxiVis' preprocessed KD-tree file `processed/2013_01.kdtrip` from the
 directory in `FOIL2013` (default `~/data/FOIL2013`); nothing is downloaded.
 Same rows, order and columns as ProgressiVis' `taxivis/prepare_data.py`:
@@ -14,10 +16,22 @@ Same rows, order and columns as ProgressiVis' `taxivis/prepare_data.py`:
 
 Stratified order: the KD-tree leaves (trips, sorted in space) in bit-reversed
 order, so every prefix is a sample spread over time and place.
+
+`--year`: all trips of the months (default the whole year, about 170 M) from
+the raw `Tripdata_2013/trip_data_M.csv` and `Faredata_2013/trip_fare_M.csv`,
+whose rows correspond one to one (checked: same pickup time). Same columns,
+in a random order with a fixed seed, so every prefix is a simple random
+sample (what TaxiVis' accuracy estimates assume). `hour` counts New York
+wall-clock hours since 2013-01-01 00:00 (so `hour % 24` is the hour of day,
+across daylight saving time). Missing coordinates become 0 (outside NYC),
+missing numbers 0; passenger counts are clamped to 0-255.
 """
 
 using Arrow
+using CSV
+using Dates
 using Mmap
+using Random
 
 include(joinpath(@__DIR__, "regions.jl"))
 
@@ -127,7 +141,90 @@ function prepare(; rows::Union{Nothing, Int}=nothing, month::Int=1)
     return target
 end
 
+# ------------------------------------------------------------ year, from the CSVs
+
+year_path(months, rows=nothing) =
+    joinpath(@__DIR__, "data", "taxivis_2013" * (months == 1:12 ? "" : "_$(first(months))-$(last(months))") *
+             "_random" * (rows === nothing ? "" : "_$rows") * ".arrow")
+
+const PAYMENT_CODES = Dict("CSH" => 0x00, "DIS" => 0x01, "NOC" => 0x02, "CRD" => 0x03, "UNK" => 0x04)
+const YEAR_START = DateTime(2013, 1, 1)
+const STAMP = dateformat"yyyy-mm-dd HH:MM:SS"
+
+orzero(::Type{T}, x) where {T} = ismissing(x) ? zero(T) : T(x)
+hours_since_start(t::DateTime) = Dates.value(t - YEAR_START) / 3_600_000
+
+"The columns of one month, from its trip and fare CSVs"
+function month_columns(month::Int)
+    trips = CSV.File(joinpath(data_dir(), "Tripdata_2013", "trip_data_$month.csv");
+                     select=[6, 7, 8, 10, 11, 12, 13, 14], normalizenames=true,
+                     types=Dict(6 => DateTime, 7 => DateTime, 8 => Int, 10 => Float64,
+                                11 => Float32, 12 => Float32, 13 => Float32, 14 => Float32),
+                     dateformat=STAMP, ntasks=Threads.nthreads())
+    fares = CSV.File(joinpath(data_dir(), "Faredata_2013", "trip_fare_$month.csv");
+                     select=[4, 5, 6, 9], normalizenames=true,
+                     types=Dict(4 => DateTime, 5 => String, 6 => Float64, 9 => Float64),
+                     dateformat=STAMP, ntasks=Threads.nthreads())
+    n = length(trips)
+    length(fares) == n || error("month $month: $n trips but $(length(fares)) fares")
+    tp, tf = trips.pickup_datetime, fares.pickup_datetime
+    mismatched = count(i -> !isequal(tp[i], tf[i]), 1:n)
+    mismatched == 0 || error("month $month: $mismatched rows with different pickup times in trips and fares")
+    drop = trips.dropoff_datetime
+    return (pickup_long=orzero.(Float32, trips.pickup_longitude), pickup_lat=orzero.(Float32, trips.pickup_latitude),
+            dropoff_long=orzero.(Float32, trips.dropoff_longitude), dropoff_lat=orzero.(Float32, trips.dropoff_latitude),
+            distance=orzero.(Float64, trips.trip_distance),
+            fare_amount=orzero.(Float64, fares.fare_amount), tip_amount=orzero.(Float64, fares.tip_amount),
+            passengers=[UInt8(clamp(orzero(Int, p), 0, 255)) for p in trips.passenger_count],
+            payment_type=[ismissing(p) ? 0x04 : get(PAYMENT_CODES, p, 0x04) for p in fares.payment_type],
+            hour=hours_since_start.(tp),
+            duration=[ismissing(d) ? 0.0 : Dates.value(d - t) / 60_000 for (t, d) in zip(tp, drop)])
+end
+
+function prepare_year(; months=1:12, rows::Union{Nothing, Int}=nothing, seed::Int=2013)
+    t0 = time()
+    names = nothing
+    parts = map(months) do m
+        t = time()
+        c = month_columns(m)
+        names = keys(c)
+        println("  month $m: $(length(c.hour)) trips in $(round(time() - t, digits=1)) s")
+        GC.gc()
+        Dict{Symbol, AbstractVector}(pairs(c))
+    end
+    n = sum(p -> length(p[:hour]), parts)
+    order = randperm(Xoshiro(seed), n)
+    rows === nothing || (order = order[1:min(rows, n)])
+    # one column at a time: concatenate, permute, free the months' copies
+    # (peak: the data once plus two columns)
+    cols = map(names) do name
+        all = reduce(vcat, (pop!(p, name) for p in parts))
+        permuted = all[order]
+        all = nothing; GC.gc()
+        permuted
+    end
+    out = NamedTuple{names}(cols)
+    t1 = time()
+    regions = load_regions()
+    out = merge(out, (pickup_nbhd=locate(regions, out.pickup_long, out.pickup_lat),
+                      dropoff_nbhd=locate(regions, out.dropoff_long, out.dropoff_lat)))
+    println("  neighborhoods in $(round(time() - t1, digits=1)) s")
+    target = year_path(months, rows)
+    Arrow.write(target, out)
+    println("$(length(order)) trips -> $target ($(round(filesize(target) / 1e6)) MB, " *
+            "$(round(time() - t0, digits=1)) s)")
+    return target
+end
+
+function months_option()
+    i = findfirst(==("--months"), ARGS)
+    i === nothing && return 1:12
+    a, b = parse.(Int, split(ARGS[i + 1], '-'; limit=2) |> x -> length(x) == 1 ? [x[1], x[1]] : x)
+    return a:b
+end
+
 if abspath(PROGRAM_FILE) == @__FILE__
     i = findfirst(==("--rows"), ARGS)
-    prepare(rows=i === nothing ? nothing : parse(Int, ARGS[i + 1]))
+    rows = i === nothing ? nothing : parse(Int, ARGS[i + 1])
+    "--year" in ARGS ? prepare_year(months=months_option(), rows=rows) : prepare(rows=rows)
 end
