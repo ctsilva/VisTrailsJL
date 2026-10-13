@@ -132,3 +132,6 @@ function compute(mod::ModuleInstance, ::Type{StandardOutputModule})
 
     return mod.outputs
 end
+
+# Printing is a side effect: run it every time
+is_cacheable(::Type{StandardOutputModule}) = false

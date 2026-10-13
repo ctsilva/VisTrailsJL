@@ -18,6 +18,9 @@ on_module_start(::ExecutionObserver, run, mod) = nothing
 """Called after a module computes successfully."""
 on_module_done(::ExecutionObserver, run, mod, outputs) = nothing
 
+"""Called instead of start/done when a module's outputs are reused from a cache."""
+on_module_cached(::ExecutionObserver, run, mod, outputs) = nothing
+
 """Called when a module throws; the run is then aborted."""
 on_module_error(::ExecutionObserver, run, mod, err) = nothing
 
@@ -46,6 +49,10 @@ function on_module_done(::ConsoleObserver, run, mod, outputs)
         println("    Outputs: ", output_str)
     end
     println("    ✓ Complete")
+end
+
+function on_module_cached(::ConsoleObserver, run, mod, outputs)
+    println("  Module $(mod.id) ($(mod.descriptor.name)): using cached results")
 end
 
 function on_module_error(::ConsoleObserver, run, mod, err)

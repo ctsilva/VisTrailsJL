@@ -322,6 +322,9 @@ function on_module_done(obs::NotebookOutputObserver, run, mod, outputs)
     end
 end
 
+on_module_cached(obs::NotebookOutputObserver, run, mod, outputs) =
+    on_module_done(obs, run, mod, outputs)
+
 """
     execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflow;
                               id_to_module=nothing, enable_logging::Bool=false,
@@ -334,6 +337,7 @@ Execute a pipeline built from a workflow notebook.
 Options:
 - `notebook_path`: Path to the workflow notebook (required if save_outputs=true)
 - `save_outputs`: If true, save execution results back to the notebook incrementally
+- `engine`: execution engine (e.g. a `CachedEngine` kept across calls)
 
 Returns:
 - cache: Full execution cache (all module outputs)
@@ -342,7 +346,8 @@ Returns:
 function execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflow;
                                    id_to_module=nothing, enable_logging::Bool=false,
                                    notebook_path::Union{String,Nothing}=nothing,
-                                   save_outputs::Bool=false)
+                                   save_outputs::Bool=false,
+                                   engine::Engine=OneShotEngine())
     if save_outputs && notebook_path === nothing
         error("notebook_path must be provided when save_outputs=true")
     end
@@ -359,7 +364,7 @@ function execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflo
         end
     end
 
-    run = run!(OneShotEngine(), pipeline; observers=observers, enable_logging=enable_logging)
+    run = run!(engine, pipeline; observers=observers, enable_logging=enable_logging)
     workflow_outputs = extract_workflow_outputs(workflow, pipeline, run.outputs, id_to_module)
 
     return run.outputs, workflow_outputs

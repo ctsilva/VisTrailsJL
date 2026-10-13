@@ -1,6 +1,6 @@
 # Progressive Execution Plan for VisTrailsJL
 
-Status: Phase 0 done (branch `progressive-engine`). Started 2026-10-13.
+Status: Phases 0 and 1 done (branch `progressive-engine`). Started 2026-10-13.
 
 ## Goal
 
@@ -157,3 +157,25 @@ Import its module catalog as descriptors, or drive it as an external engine.
   pipelines; saving outputs into notebooks is a `NotebookOutputObserver`;
   `get_input_list` gives every value connected to a port; topological order
   is deterministic. Tests: `test/execution/test_engine.jl`; suite 21/21.
+- 2026-10-13: Phase 1 done. `src/core/interpreter/signatures.jl`:
+  `module_signature` (package, name, implementation, parameters, preset
+  inputs, port specs; typed canonical encoding, SHA-1) and
+  `subpipeline_signatures` (plus incoming connections in id order, since
+  that order defines list inputs). `CachedEngine` reuses outputs by
+  signature across runs and versions, and within a run for identical
+  modules (gcd.vt v122 has four). A module is reusable only if it and its
+  whole upstream are `is_cacheable` (`StandardOutput` and `MplFigureOutput`
+  are not). Notebook modules are identified by their compute closure, so
+  re-registering a package invalidates them. Reuse is logged
+  (`ModuleExec.cached`, `signature` annotation) and reported via
+  `on_module_cached`. The API wrappers keep a `CachedEngine`, so repeated
+  `execute` calls only recompute what changed. Tests:
+  `test/execution/test_cached_engine.jl`; suite 22/22.
+
+  Open points: the cache is unbounded and in memory (no eviction, no
+  persistence; notebook-module signatures are session-local); `HTTPFile`
+  is cached by URL only, not by ETag/modification time; cached outputs are
+  shared between runs, so modules must not mutate their inputs.
+  `select_version!` only works for versions already reconstructed (the
+  loader replays one version), and only v122 of gcd.vt executes (earlier
+  versions hit the `If`/`While` stubs) — both pre-existing.

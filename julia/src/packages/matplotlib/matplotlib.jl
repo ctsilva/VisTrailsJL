@@ -90,6 +90,9 @@ function compute(self::ModuleInstance, ::Type{MplFigureOutput})
     return self.outputs
 end
 
+# Writing a file is a side effect: run it every time
+is_cacheable(::Type{MplFigureOutput}) = false
+
 ################################################################################
 # MplLinePlot - Line plots
 ################################################################################

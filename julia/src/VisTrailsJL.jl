@@ -28,6 +28,7 @@ include("core/modules/module_registry.jl")
 # Execution logging and engines
 include("core/log/log.jl")
 include("core/interpreter/observers.jl")
+include("core/interpreter/signatures.jl")
 include("core/interpreter/engine.jl")
 
 # Rendering
@@ -53,9 +54,10 @@ include("api/api.jl")
 export load_vistrail, load_vistrail_internal, execute_pipeline, execute
 
 # Execution engine exports
-export Engine, OneShotEngine, PipelineRun, run!
+export Engine, OneShotEngine, CachedEngine, PipelineRun, run!, clear_cache!
 export ExecutionObserver, ConsoleObserver
-export on_run_start, on_module_start, on_module_done, on_module_error, on_run_done
+export on_run_start, on_module_start, on_module_done, on_module_cached, on_module_error, on_run_done
+export module_signature, subpipeline_signatures, is_cacheable
 export get_input_list
 export Vistrail, Pipeline, ModuleInstance, Connection
 export add_module!, add_connection!, set_parameter!

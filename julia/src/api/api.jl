@@ -38,7 +38,11 @@ mutable struct VistrailWrapper
     file_path::Union{String, Nothing}
     current_pipeline::Union{Pipeline, Nothing}
     last_result::Union{ExecutionResult, Nothing}
+    engine::Engine  # kept across executions, so results are reused between versions
 end
+
+VistrailWrapper(vistrail, file_path, current_pipeline, last_result) =
+    VistrailWrapper(vistrail, file_path, current_pipeline, last_result, CachedEngine())
 
 """
     PipelineWrapper
@@ -49,7 +53,12 @@ mutable struct PipelineWrapper
     pipeline::Pipeline
     vistrail::Union{VistrailWrapper, Nothing}
     last_result::Union{ExecutionResult, Nothing}
+    engine::Engine
 end
+
+PipelineWrapper(pipeline, vistrail, last_result) =
+    PipelineWrapper(pipeline, vistrail, last_result,
+                    vistrail === nothing ? CachedEngine() : vistrail.engine)
 
 # ============================================================================
 # Loading Functions
@@ -202,6 +211,9 @@ end
 
 Execute a pipeline wrapper.
 
+Results are cached in the wrapper's `CachedEngine`: only modules whose
+subpipeline changed since an earlier execution are recomputed.
+
 # Keyword Arguments
 - `enable_logging::Bool = true` - Enable provenance logging
 - `save_outputs::Bool = false` - Save outputs to notebook (for notebook workflows)
@@ -216,7 +228,8 @@ function execute(pw::PipelineWrapper; enable_logging::Bool=true, save_outputs::B
     end
 
     # Execute pipeline
-    cache, workflow_exec = execute_pipeline(pipeline, enable_logging=enable_logging)
+    cache, workflow_exec = execute_pipeline(pipeline, enable_logging=enable_logging,
+                                            engine=pw.engine)
 
     # Build module ID map (name/function -> ID)
     module_id_map = build_module_id_map(pipeline)

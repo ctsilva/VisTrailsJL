@@ -61,7 +61,8 @@ const TEST_SUITES = Dict(
             "test_logging_simple.jl",
             "test_pythoncalc_params.jl",
             "test_port_specs.jl",
-            "test_engine.jl"
+            "test_engine.jl",
+            "test_cached_engine.jl"
         ]
     )
 )
