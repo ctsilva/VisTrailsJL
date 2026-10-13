@@ -25,8 +25,10 @@ include("core/db/io.jl")
 # Module registry
 include("core/modules/module_registry.jl")
 
-# Interpreter
-include("core/interpreter/default.jl")
+# Execution logging and engines
+include("core/log/log.jl")
+include("core/interpreter/observers.jl")
+include("core/interpreter/engine.jl")
 
 # Rendering
 include("rendering/workflow_svg.jl")
@@ -49,6 +51,12 @@ include("api/api.jl")
 
 # Exports
 export load_vistrail, load_vistrail_internal, execute_pipeline, execute
+
+# Execution engine exports
+export Engine, OneShotEngine, PipelineRun, run!
+export ExecutionObserver, ConsoleObserver
+export on_run_start, on_module_start, on_module_done, on_module_error, on_run_done
+export get_input_list
 export Vistrail, Pipeline, ModuleInstance, Connection
 export add_module!, add_connection!, set_parameter!
 export print_vistrail_info, print_pipeline_info

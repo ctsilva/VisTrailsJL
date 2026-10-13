@@ -36,3 +36,4 @@ doc/usersguide/_build/
 # Generated SVG outputs (keep examples)
 julia/*.svg
 !julia/examples/*.svg
+julia/test/legacy/*.svg

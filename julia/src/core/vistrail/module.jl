@@ -72,6 +72,7 @@ mutable struct ModuleInstance
     id::Int
     descriptor::ModuleDescriptor
     inputs::Dict{String, Any}
+    input_lists::Dict{String, Vector{Any}}  # all values per input port, in connection order
     outputs::Dict{String, Any}
     parameters::Dict{String, Any}
     annotations::Dict{String, String}  # key-value pairs like "__desc__" => "a (integer)"
@@ -83,6 +84,7 @@ mutable struct ModuleInstance
     function ModuleInstance(id::Int, descriptor::ModuleDescriptor)
         new(id, descriptor,
             Dict{String, Any}(),
+            Dict{String, Vector{Any}}(),
             Dict{String, Any}(),
             Dict{String, Any}(),
             Dict{String, String}(),
@@ -115,6 +117,32 @@ function set_parameter!(mod::ModuleInstance, param_name::String, value::Any)
     mod.parameters[param_name] = value
     mod.cache_state = :invalid
     mod.uptodate = false
+end
+
+"""
+    get_input_list(mod::ModuleInstance, port_name::String) -> Vector{Any}
+
+All values connected to an input port, in connection order (empty if none).
+"""
+function get_input_list(mod::ModuleInstance, port_name::String)
+    return get(mod.input_lists, port_name, Any[])
+end
+
+"""
+    instance_for_run(mod::ModuleInstance) -> ModuleInstance
+
+Copy of a pipeline module for one execution: same id, descriptor,
+parameters, annotations and preset inputs, with fresh outputs. Engines run
+these copies so that executing does not mutate the pipeline.
+"""
+function instance_for_run(mod::ModuleInstance)
+    inst = ModuleInstance(mod.id, mod.descriptor)
+    merge!(inst.inputs, mod.inputs)
+    merge!(inst.parameters, mod.parameters)
+    merge!(inst.annotations, mod.annotations)
+    append!(inst.port_specs, mod.port_specs)
+    inst.layout_position = mod.layout_position
+    return inst
 end
 
 """

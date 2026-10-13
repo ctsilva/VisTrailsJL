@@ -106,13 +106,8 @@ function topological_sort(pipeline::Pipeline)
         in_degree[conn.dest_module_id] += 1
     end
 
-    # Queue of modules with no dependencies
-    queue = Int[]
-    for (id, degree) in in_degree
-        if degree == 0
-            push!(queue, id)
-        end
-    end
+    # Queue of modules with no dependencies (sorted, so the order is deterministic)
+    queue = sort([id for (id, degree) in in_degree if degree == 0])
 
     # Process queue
     sorted = Int[]

@@ -299,15 +299,37 @@ function build_pipeline_from_workflow(workflow::NotebookWorkflow)
 end
 
 """
+    NotebookOutputObserver
+
+Saves each module's outputs into the workflow notebook as it completes.
+`notebook_ids` maps pipeline module ids to notebook module ids.
+"""
+struct NotebookOutputObserver <: ExecutionObserver
+    notebook_path::String
+    notebook_ids::Dict{Int, String}
+end
+
+function on_module_done(obs::NotebookOutputObserver, run, mod, outputs)
+    nb_module_id = get(obs.notebook_ids, mod.id, nothing)
+    nb_module_id === nothing && return
+
+    execution_count = findfirst(==(mod.id), run.order)
+    try
+        update_notebook_with_execution(obs.notebook_path, nb_module_id, outputs, execution_count)
+        println("    💾 Saved outputs to notebook")
+    catch e
+        @warn "Failed to save outputs for module $nb_module_id: $e"
+    end
+end
+
+"""
     execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflow;
                               id_to_module=nothing, enable_logging::Bool=false,
                               notebook_path::Union{String,Nothing}=nothing,
                               save_outputs::Bool=false)
         -> (Dict{Int, Dict{String, Any}}, Dict{String, Any})
 
-Execute a pipeline that may contain notebook-defined modules.
-Uses notebook compute functions for modules defined in notebooks,
-falls back to standard compute for built-in modules.
+Execute a pipeline built from a workflow notebook.
 
 Options:
 - `notebook_path`: Path to the workflow notebook (required if save_outputs=true)
@@ -321,86 +343,26 @@ function execute_notebook_pipeline(pipeline::Pipeline, workflow::NotebookWorkflo
                                    id_to_module=nothing, enable_logging::Bool=false,
                                    notebook_path::Union{String,Nothing}=nothing,
                                    save_outputs::Bool=false)
-    cache = Dict{Int, Dict{String, Any}}()
-
-    # Validate options
     if save_outputs && notebook_path === nothing
         error("notebook_path must be provided when save_outputs=true")
     end
 
-    # Clear outputs if saving (start fresh)
-    if save_outputs && notebook_path !== nothing
+    observers = ExecutionObserver[ConsoleObserver()]
+    if save_outputs
+        # Start fresh
         clear_notebook_outputs(notebook_path)
         println("Cleared previous outputs from notebook")
-    end
 
-    # Get execution order
-    execution_order = topological_sort(pipeline)
-
-    println("Executing pipeline with $(length(pipeline.modules)) modules...")
-    println("Execution order: ", execution_order)
-
-    execution_count = 0
-
-    for module_id in execution_order
-        mod = get_module(pipeline, module_id)
-        execution_count += 1
-
-        println("  Module $module_id ($(mod.descriptor.name)): computing...")
-
-        # Collect inputs from upstream
-        incoming = get_connections_to(pipeline, module_id)
-        for conn in incoming
-            if haskey(cache, conn.source_module_id)
-                source_outputs = cache[conn.source_module_id]
-                if haskey(source_outputs, conn.source_port)
-                    set_input!(mod, conn.dest_port, source_outputs[conn.source_port])
-                end
-            end
-        end
-
-        # Execute - check if it's a notebook module first
-        key = (mod.descriptor.package, mod.descriptor.name)
-        compute_fn = get_notebook_compute(key...)
-
-        outputs = if compute_fn !== nothing
-            # Notebook module - use stored function
-            compute_fn(mod)
-        else
-            # Built-in module - use standard compute
-            compute(mod, mod.descriptor.module_type)
-        end
-
-        cache[module_id] = outputs
-        println("    Outputs: $outputs")
-        println("    ✓ Complete")
-
-        # Save outputs to notebook if requested
-        if save_outputs && notebook_path !== nothing && id_to_module !== nothing
-            # Find the notebook module ID for this pipeline module
-            nb_module_id = nothing
-            for (nb_id, pipeline_mod) in id_to_module
-                if pipeline_mod.id == module_id
-                    nb_module_id = nb_id
-                    break
-                end
-            end
-
-            if nb_module_id !== nothing
-                try
-                    update_notebook_with_execution(notebook_path, nb_module_id, outputs, execution_count)
-                    println("    💾 Saved outputs to notebook")
-                catch e
-                    @warn "Failed to save outputs for module $nb_module_id: $e"
-                end
-            end
+        if id_to_module !== nothing
+            notebook_ids = Dict(mod.id => nb_id for (nb_id, mod) in id_to_module)
+            push!(observers, NotebookOutputObserver(notebook_path, notebook_ids))
         end
     end
 
-    # Extract workflow outputs
-    workflow_outputs = extract_workflow_outputs(workflow, pipeline, cache, id_to_module)
+    run = run!(OneShotEngine(), pipeline; observers=observers, enable_logging=enable_logging)
+    workflow_outputs = extract_workflow_outputs(workflow, pipeline, run.outputs, id_to_module)
 
-    return cache, workflow_outputs
+    return run.outputs, workflow_outputs
 end
 
 """
@@ -409,48 +371,9 @@ end
 Execute a pipeline (backward compatibility version without workflow outputs).
 """
 function execute_notebook_pipeline(pipeline::Pipeline; enable_logging::Bool=false)
-    cache = Dict{Int, Dict{String, Any}}()
-
-    # Get execution order
-    execution_order = topological_sort(pipeline)
-
-    println("Executing pipeline with $(length(pipeline.modules)) modules...")
-    println("Execution order: ", execution_order)
-
-    for module_id in execution_order
-        mod = get_module(pipeline, module_id)
-
-        println("  Module $module_id ($(mod.descriptor.name)): computing...")
-
-        # Collect inputs from upstream
-        incoming = get_connections_to(pipeline, module_id)
-        for conn in incoming
-            if haskey(cache, conn.source_module_id)
-                source_outputs = cache[conn.source_module_id]
-                if haskey(source_outputs, conn.source_port)
-                    set_input!(mod, conn.dest_port, source_outputs[conn.source_port])
-                end
-            end
-        end
-
-        # Execute - check if it's a notebook module first
-        key = (mod.descriptor.package, mod.descriptor.name)
-        compute_fn = get_notebook_compute(key...)
-
-        outputs = if compute_fn !== nothing
-            # Notebook module - use stored function
-            compute_fn(mod)
-        else
-            # Built-in module - use standard compute
-            compute(mod, mod.descriptor.module_type)
-        end
-
-        cache[module_id] = outputs
-        println("    Outputs: $outputs")
-        println("    ✓ Complete")
-    end
-
-    return cache
+    run = run!(OneShotEngine(), pipeline; observers=ExecutionObserver[ConsoleObserver()],
+               enable_logging=enable_logging)
+    return run.outputs
 end
 
 """
