@@ -145,7 +145,9 @@ Comprehensive analysis of what's implemented vs what exists in Python VisTrails.
 | vistrails/core/vistrail/module.py | module.jl | ✅ Complete |
 | vistrails/core/vistrail/pipeline.py | pipeline.jl | ✅ Complete |
 | vistrails/core/vistrail/vistrail.py | vistrail.jl | ✅ Complete |
-| vistrails/core/interpreter/default.py | default.jl | ✅ Complete |
+| vistrails/core/interpreter/default.py | interpreter/engine.jl (`OneShotEngine`) | ✅ Complete |
+| vistrails/core/interpreter/cached.py | interpreter/engine.jl (`CachedEngine`) | ✅ Complete |
+| vistrails/core/cache/hasher.py | interpreter/signatures.jl | ✅ Complete |
 | vistrails/core/modules/module_registry.py | module_registry.jl | ✅ Complete |
 | vistrails/db/services/io.py | db/services/io.jl | ✅ Complete |
 | vistrails/packages/basic/init.py | basic/init.jl | ✅ Complete |

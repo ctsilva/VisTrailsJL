@@ -236,6 +236,22 @@ save_package_code("my_package.ipynb", "my_package.jl")
 vistrail_workflow_to_notebook("examples/gcd.vt", 134; output_path="gcd.ipynb")
 ```
 
+#### Execution Engine (`julia/src/core/interpreter/`)
+
+Pipelines run through pluggable engines (`run!(engine, pipeline)`):
+`OneShotEngine`, and `CachedEngine`, which reuses results by subpipeline
+signature across runs and versions. A progressive/parallel execution model
+borrowing from ProgressiVis is being built in phases on the
+`progressive-engine` branch.
+
+- `julia/docs/EXECUTION.md`: user guide to the current capabilities.
+- `julia/docs/PROGRESSIVE_EXECUTION_PLAN.md`: plan and progress log.
+
+**Keep both up to date with each change to execution:** add new
+capabilities, APIs and limits to `EXECUTION.md` (capabilities table,
+relevant section, changelog), and record progress and open points in the
+plan's progress log.
+
 #### Design Documents (in `julia/docs/`)
 - `PACKAGE_DEFINITIONS_V2.md` - Package notebook specification
 - `WORKFLOW_DEFINITIONS.md` - Workflow notebook specification

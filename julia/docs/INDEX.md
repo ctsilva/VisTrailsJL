@@ -26,6 +26,13 @@ The primary way to define and execute workflows in VisTrailsJL.
 | [RENDERING.md](RENDERING.md) | SVG rendering system |
 | [LOGGING.md](LOGGING.md) | Execution logging and provenance |
 
+## Execution
+
+| Document | Description |
+|----------|-------------|
+| [EXECUTION.md](EXECUTION.md) | Engines, caching, observers, writing modules (current capabilities) |
+| [PROGRESSIVE_EXECUTION_PLAN.md](PROGRESSIVE_EXECUTION_PLAN.md) | Plan and progress log for the progressive/parallel execution model |
+
 ## VisFlow Viewer (Separate Project)
 
 Documentation for the [VisFlow-Lite](https://github.com/ctsilva/VisFlow-Lite) viewer project.
@@ -55,11 +62,13 @@ Documentation for the [VisFlow-Lite](https://github.com/ctsilva/VisFlow-Lite) vi
 - Get started → [README.md](../README.md)
 - Define a package → [PACKAGE_DEFINITIONS_V2.md](PACKAGE_DEFINITIONS_V2.md)
 - Define a workflow → [WORKFLOW_DEFINITIONS.md](WORKFLOW_DEFINITIONS.md)
+- Run workflows, use caching → [EXECUTION.md](EXECUTION.md)
 
 **Understand the implementation:**
 - Feature status → [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)
 - SVG rendering → [RENDERING.md](RENDERING.md)
 - Execution logging → [LOGGING.md](LOGGING.md)
+- Execution model roadmap → [PROGRESSIVE_EXECUTION_PLAN.md](PROGRESSIVE_EXECUTION_PLAN.md)
 
 **Build a viewer:**
 - VisFlow integration → [VISFLOW_INTEGRATION.md](VISFLOW_INTEGRATION.md)

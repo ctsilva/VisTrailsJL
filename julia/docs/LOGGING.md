@@ -145,13 +145,14 @@ add_module_exec!(wf_exec, mod_exec)
 mark_completed!(wf_exec)
 ```
 
-### With Interpreter
+### With Engines
 
-The interpreter automatically creates execution logs when `enable_logging=true`:
+Every engine creates execution logs when `enable_logging=true` (see
+[EXECUTION.md](EXECUTION.md)). Modules reused from a cache are marked
+`cached`, and each `ModuleExec` carries the module's subpipeline signature
+in `annotations["signature"]`:
 
 ```julia
-include("src/core/interpreter/default.jl")
-
 # Execute with logging (default)
 cache, workflow_exec = execute_pipeline(pipeline)
 

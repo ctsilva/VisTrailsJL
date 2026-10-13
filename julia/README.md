@@ -293,8 +293,6 @@ Track workflow execution with comprehensive provenance records, similar to Pytho
 
 **Usage:**
 ```julia
-include("src/core/interpreter/default.jl")
-
 # Execute with logging (enabled by default)
 cache, workflow_exec = execute_pipeline(pipeline)
 
@@ -319,6 +317,24 @@ print_summary(log)  # Formatted summary with statistics
 ```
 
 See [docs/LOGGING.md](docs/LOGGING.md) for complete documentation.
+
+### Execution Engines and Caching ⭐ NEW!
+
+Pipelines run through pluggable engines. `CachedEngine` reuses results across
+runs and versions (VisTrails-style subpipeline signatures), so an edit
+recomputes only the edited module and its downstream. Observers receive
+events during a run.
+
+```julia
+engine = CachedEngine()
+run = run!(engine, pipeline)      # computes everything
+run = run!(engine, pipeline)      # reuses everything
+run.reused                        # ids of modules taken from the cache
+```
+
+The high-level `execute(vt)` keeps a `CachedEngine` per vistrail. See
+[docs/EXECUTION.md](docs/EXECUTION.md) for engines, caching, observers and
+writing modules.
 
 #### SVG Rendering Features
 
