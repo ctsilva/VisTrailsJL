@@ -26,13 +26,47 @@ const PROG = "org.vistrails.progressive"
 const NYC = Dict("x0" => -74.09, "x1" => -73.72, "y0" => 40.60, "y1" => 40.88)  # same scale on both axes
 # Attribute histograms: column => (min, max, bins, label), in display order
 const ATTRS = [
-    "hour" => (0.0, 744.0, 744, "Pickups per hour, January 2013"),
+    "hour" => (0.0, 744.0, 744, "Pickups per hour, January 2013"),   # replaced per data file (`attributes`)
     "fare_amount" => (0.0, 80.0, 80, "Fare (\$)"),
     "tip_amount" => (0.0, 20.0, 80, "Tip (\$)"),
     "distance" => (0.0, 25.0, 100, "Distance (miles)"),
     "duration" => (0.0, 90.0, 90, "Duration (minutes)"),
 ]
 const ATTR_NAMES = Set(first.(ATTRS))
+
+"""
+    attributes(hours) -> Vector
+
+`ATTRS` for data covering `hours` hours from 2013-01-01: hourly bins over
+the whole period (744 for January, 8760 for the year).
+"""
+function attributes(hours::Int)
+    period = hours <= 744 ? "January 2013" : "2013"
+    return ["hour" => (0.0, Float64(hours), hours, "Pickups per hour, $period"), ATTRS[2:end]...]
+end
+
+period_name(attrs) = attrs[1][2][2] <= 744 ? "January 2013" : "2013"
+
+# The view Variable's value: map bounds and the mode (which ends are shown)
+view_value(bounds, mode) = Dict{String, Any}(bounds..., "mode" => mode)
+
+# How the page draws a histogram, for convergence (`VT.converged`): chart
+# heights in pixels (canvas height minus padding), and how many hourly bins
+# make one drawn point of the time series (days, when hours outnumber pixels)
+const CHART_HEIGHT = Dict("hour" => 122.0)
+const DEFAULT_CHART_HEIGHT = 99.0
+const HOUR_CHART_WIDTH = 668
+hour_group(bins::Int) = bins > 2 * HOUR_CHART_WIDTH ? 24 : 1
+# Color levels per unit of log1p(count) / log1p(max count): map gray
+# 200 · 0.8 (gamma), query alpha 255 · 0.65, neighborhood opacity 255 · 0.8
+const MAP_LEVELS = 166.0
+const NBHD_LEVELS = 204.0
+const Z95 = 1.96
+# Default tolerance: displays may still change by this many color levels or
+# pixels (at 95%). Measured on the year (all-trips pickup map, 99% of trips
+# stable): 1 level needs ~65% of the trips, 2 ~30%, 3 ~17%, 4 ~10%; the
+# daily time series 10% at 1 pixel, 5% at 2, 2% at 3; other charts < 2%.
+const DEFAULT_TOLERANCE = 3.0
 const ENDS = ["pickup" => ("pickup_long", "pickup_lat"), "dropoff" => ("dropoff_long", "dropoff_lat")]
 const COLORS = ["#f28e2b", "#e15759", "#4e79a7"]   # orange, red, blue as in the paper
 const FIRST_WEEKDAY = 1                            # 2013-01-01 was a Tuesday (Monday = 0)
@@ -236,7 +270,8 @@ VT.progress(s::TripFilterState) = (s.scanned, last_id(s.table))
 
 Immutable snapshot published by a histogram after each step: the query
 revision it counts, the selected trips processed, the counts, the bounds
-(maps), and when the first counts for this revision and bounds appeared.
+(maps), when the first counts for this revision and bounds appeared, and
+whether more data would still visibly change the display.
 """
 struct Summary
     revision::Int
@@ -244,6 +279,7 @@ struct Summary
     values::Array{Int}
     bounds::Union{Nothing, NTuple{4, Float64}}   # x0, x1, y0, y1
     ready_at::Union{Nothing, Float64}
+    converged::Bool
 end
 
 struct TripHistogramModule end
@@ -265,6 +301,19 @@ mutable struct TripHistogramState
     processed::Int
     ready_at::Union{Nothing, Float64}
     out::ProgressiveValue{Summary}
+    # convergence (see `VT.converged`)
+    accuracy::Float64                         # share of trips in stable bins; 0: no opinion
+    tolerance::Float64                        # color levels or pixels a stable bin may still move
+    total::Int                                # trips in the data file
+    levels::Float64                           # color levels (log displays); 0: bars
+    height::Float64                           # bar displays: pixels
+    group::Int                                # bar displays: bins per drawn point
+    active_sub::Union{Nothing, ValueSubscription}   # the query's constraints
+    active::Bool                              # false: a disabled query (nothing to show)
+    scanned_sub::Union{Nothing, ValueSubscription}  # the filter's (revision, scanned, selected)
+    filter_progress::NTuple{3, Int}
+    side::String                              # maps: "pickup" or "dropoff"
+    visible::Bool                             # maps: shown in the current mode
 end
 
 optional_subscription(ctx, port) = has_input(ctx, port) ? input_subscription(ctx, port) : nothing
@@ -284,7 +333,13 @@ function VT.init_state(::Type{TripHistogramModule}, ctx::StepContext)
     end
     state = TripHistogramState(table, selection, sub, optional_subscription(ctx, "revision"),
                                optional_subscription(ctx, "bounds"), columns, bins, lo, hi, counts,
-                               0, 0, nothing, set_output!(ctx, "result", ProgressiveValue{Summary}()))
+                               0, 0, nothing, set_output!(ctx, "result", ProgressiveValue{Summary}()),
+                               Float64(param(ctx, "accuracy", 0.0)), Float64(param(ctx, "tolerance", DEFAULT_TOLERANCE)),
+                               Int(param(ctx, "total", 0)),
+                               Float64(param(ctx, "levels", 0.0)), Float64(param(ctx, "height", DEFAULT_CHART_HEIGHT)),
+                               Int(param(ctx, "group", 1)), optional_subscription(ctx, "constraints"), true,
+                               optional_subscription(ctx, "scanned"), (0, 0, 0), String(param(ctx, "side", "")), true)
+    update_active!(state)
     publish!(state)
     return state
 end
@@ -292,7 +347,62 @@ end
 bounds(s::TripHistogramState) = length(s.columns) == 2 ? (s.lo[1], s.hi[1], s.lo[2], s.hi[2]) : nothing
 
 publish!(s::TripHistogramState) =
-    set!(s.out, Summary(s.revision, s.processed, copy(s.counts), bounds(s), s.ready_at))
+    set!(s.out, Summary(s.revision, s.processed, copy(s.counts), bounds(s), s.ready_at, VT.converged(s) === true))
+
+# Trips its filter has scanned for this revision (the sample its selection is from)
+rows_scanned(s::TripHistogramState) = s.filter_progress[1] == s.revision ? s.filter_progress[2] : 0
+
+# A query's histograms have nothing to show while it is disabled
+function update_active!(s::TripHistogramState)
+    (s.active_sub === nothing || !has_changes(s.active_sub)) && return
+    c = take_value!(s.active_sub)
+    s.active = c isa Constraints ? c.enabled : true
+end
+
+"""
+    converged(s::TripHistogramState)
+
+Whether more trips would not visibly change this histogram as drawn: at
+least `accuracy` of its trips lie in bins whose 95% interval stays within
+`tolerance` color levels (log displays: maps, neighborhoods) or pixels (bar
+charts, per drawn point). Counts are those of a simple random sample of
+`read` of the `total` trips: relative error √((1 - read/total)/count), 0
+once every trip was read.
+What is not displayed has converged: a disabled query's histograms, and
+maps of the end not shown in the current mode. An enabled query with no
+trips yet has not (rare trips need more data). `nothing` when `accuracy`
+is 0.
+"""
+function VT.converged(s::TripHistogramState)
+    s.accuracy > 0 || return nothing
+    (s.active && s.visible) || return true
+    read = s.selection === nothing ? s.processed : rows_scanned(s)
+    s.total > 0 && read >= s.total && return true
+    mass = sum(s.counts)
+    mass == 0 && return false
+    scale = s.total > 0 ? s.total / max(read, 1) : Inf     # all trips / trips read
+    unstable = s.levels > 0 ? unstable_log(s.counts, s.levels, scale, s.tolerance) :
+                              unstable_bars(s.counts, s.group, s.height, s.tolerance, scale)
+    return unstable <= (1 - s.accuracy) * mass
+end
+
+# Trips in bins whose color level could move by more than `tolerance`:
+# level ≈ levels · log1p(ĉ)/log1p(ĉmax) with ĉ the estimate for all trips
+# (count · scale); a relative error ε moves log1p(ĉ) by about ε
+function unstable_log(counts::AbstractArray{Int}, levels::Float64, scale::Float64, tolerance::Float64)
+    span = log1p(maximum(counts) * scale)
+    threshold = (Z95 * levels / (span * tolerance))^2 * (1 - 1 / scale)   # stable when count ≥ this
+    return sum(c for c in counts if 0 < c < threshold; init=0)
+end
+
+# Trips in drawn points whose height could move by more than `tolerance`
+# pixels: height · count / max
+function unstable_bars(counts::AbstractVector{Int}, group::Int, height::Float64, tolerance::Float64, scale::Float64)
+    points = [sum(@view counts[i:min(i + group - 1, end)]) for i in 1:group:length(counts)]
+    top = maximum(points)
+    fpc = 1 - 1 / scale
+    return sum(c for c in points if c > 0 && Z95 * height * sqrt(c * fpc) / top > tolerance; init=0)
+end
 
 # Bin of x in [lo, hi] with `bins` equal bins (hi in the last bin), 0 outside
 @inline function bin_of(x::Real, lo::Float64, hi::Float64, bins::Int)
@@ -305,15 +415,20 @@ function VT.step!(s::TripHistogramState, ctx::StepContext, budget::Int)
     # With a selection, the trips table is only read through it: discard its
     # changes, or they would keep this module ready forever
     s.selection === nothing || VT.consume_all!(input_subscription(ctx, "table"))
+    was_converged = VT.converged(s) === true
+    update_active!(s)
+    s.scanned_sub !== nothing && has_changes(s.scanned_sub) && (s.filter_progress = take_value!(s.scanned_sub))
     restart = false
     if s.revision_sub !== nothing && has_changes(s.revision_sub)
         s.revision = take_value!(s.revision_sub)
         restart = true
     end
     if s.bounds_sub !== nothing && has_changes(s.bounds_sub)
-        b = take_value!(s.bounds_sub)
-        s.lo, s.hi = [b["x0"], b["y0"]], [b["x1"], b["y1"]]
-        restart = true
+        view = take_value!(s.bounds_sub)
+        lo, hi = [view["x0"], view["y0"]], [view["x1"], view["y1"]]
+        (lo, hi) == (s.lo, s.hi) || (restart = true)
+        s.lo, s.hi = lo, hi
+        s.visible = get(view, "mode", s.side) in (s.side, "both")
     end
     pending_ = pending(s.sub)
     restart |= pending_.updated > 0 || pending_.deleted > 0   # the selection was emptied
@@ -322,6 +437,11 @@ function VT.step!(s::TripHistogramState, ctx::StepContext, budget::Int)
         fill!(s.counts, 0)
         s.processed = 0
         s.ready_at = nothing
+    end
+    # Converged: leave the trips already loaded (stepped here for a control input)
+    if !restart && VT.converged(s) === true
+        was_converged || publish!(s)
+        return StepResult(:blocked, 0)
     end
 
     ids = next_created!(s.sub, budget)
@@ -357,10 +477,13 @@ function register_taxivis_modules!()
          VT.OutputPort("revision", ProgressiveValue)], Tuple{String, Type}[]))
     VT.register_module!(VT.ModuleDescriptor(TAXIVIS, "TripHistogram", TripHistogramModule,
         [VT.InputPort("table", ProgressiveTable), VT.InputPort("selection", ProgressiveTable; optional=true),
-         VT.InputPort("revision", ProgressiveValue; optional=true), VT.InputPort("bounds", Any; optional=true)],
+         VT.InputPort("revision", ProgressiveValue; optional=true), VT.InputPort("bounds", Any; optional=true),
+         VT.InputPort("constraints", Any; optional=true), VT.InputPort("scanned", Any; optional=true)],
         [VT.OutputPort("result", ProgressiveValue)],
         Tuple{String, Type}[("column", String), ("x_column", String), ("y_column", String),
-                            ("bins", Int), ("min", Float64), ("max", Float64)]))
+                            ("bins", Int), ("min", Float64), ("max", Float64),
+                            ("accuracy", Float64), ("tolerance", Float64), ("total", Int), ("levels", Float64),
+                            ("height", Float64), ("group", Int), ("side", String)]))
 end
 
 # ---------------------------------------------------------------- dataflow
@@ -386,34 +509,61 @@ struct Dataflow
     base_maps::Dict{String, ModuleInstance}
     base_nbhd::Dict{String, ModuleInstance}
     queries::Vector{QueryModules}
+    attrs::Vector{Pair{String, NTuple{4, Any}}}   # ATTRS for this data (`attributes`)
+    total::Int                                    # trips in the data file
 end
 
+"""
+    build_dataflow(path, neighborhood_count; bins=512, throttle=0, rate=0,
+                   accuracy=0.99, tolerance=3) -> Dataflow
+
+The TaxiVis pipeline over the trips in the Arrow file `path`. With
+`accuracy > 0`, every histogram reports convergence (`VT.converged`) and
+the loader reads trips only while some display could still change by more
+than `tolerance` color levels or pixels; 0 reads every trip.
+"""
 function build_dataflow(path::AbstractString, neighborhood_count::Int; bins::Int=512, throttle::Int=0,
-                        rate::Real=0)
+                        rate::Real=0, accuracy::Real=0.99, tolerance::Real=DEFAULT_TOLERANCE)
+    file = Arrow.Table(String(path))
+    total = length(file.hour)
+    hours = max(24, 24 * ceil(Int, maximum(file.hour) / 24))
+    attrs = attributes(hours)
     p = Pipeline()
     node(package, name; params...) = (m = add_module!(p, package, name);
                                       foreach(((k, v),) -> set_parameter!(m, String(k), v), params); m)
     connect(a, out, b, in_) = add_connection!(p, a, out, b, in_)
+    convergence = (accuracy=Float64(accuracy), tolerance=Float64(tolerance), total=total)
 
     loader = node(PROG, "ArrowLoader"; path=String(path), throttle=throttle, rate=Float64(rate))
-    view = node(PROG, "Variable"; value=copy(NYC))
+    view = node(PROG, "Variable"; value=view_value(NYC, "pickup"))
 
-    function map_histogram(end_, filter=nothing)
+    function follow(h, filter, constraints)
+        filter === nothing && return h
+        connect(filter, "result", h, "selection")
+        connect(filter, "revision", h, "revision")
+        connect(filter, "progress", h, "scanned")
+        connect(constraints, "result", h, "constraints")
+        return h
+    end
+    function map_histogram(end_, filter=nothing, constraints=nothing)
         cx, cy = Dict(ENDS)[end_]
-        h = node(TAXIVIS, "TripHistogram"; x_column=cx, y_column=cy, bins=bins)
+        h = node(TAXIVIS, "TripHistogram"; x_column=cx, y_column=cy, bins=bins, levels=MAP_LEVELS, side=end_,
+                 convergence...)
         connect(loader, "result", h, "table")
         connect(view, "result", h, "bounds")
-        filter === nothing || (connect(filter, "result", h, "selection"); connect(filter, "revision", h, "revision"))
-        return h
+        return follow(h, filter, constraints)
     end
-    function histogram(column, lo, hi, nbins, filter=nothing)
-        h = node(TAXIVIS, "TripHistogram"; column=column, bins=nbins, min=lo, max=hi)
+    function histogram(column, lo, hi, nbins, filter=nothing, constraints=nothing; display...)
+        h = node(TAXIVIS, "TripHistogram"; column=column, bins=nbins, min=lo, max=hi, display..., convergence...)
         connect(loader, "result", h, "table")
-        filter === nothing || (connect(filter, "result", h, "selection"); connect(filter, "revision", h, "revision"))
-        return h
+        return follow(h, filter, constraints)
     end
-    nbhd_histogram(end_, filter=nothing) =
-        histogram("$(end_)_nbhd", 0.0, Float64(neighborhood_count), neighborhood_count, filter)
+    chart(col, lo, hi, nb, filter=nothing, constraints=nothing) =
+        histogram(col, lo, hi, nb, filter, constraints; height=get(CHART_HEIGHT, col, DEFAULT_CHART_HEIGHT),
+                  group=col == "hour" ? hour_group(nb) : 1)
+    nbhd_histogram(end_, filter=nothing, constraints=nothing) =
+        histogram("$(end_)_nbhd", 0.0, Float64(neighborhood_count), neighborhood_count, filter, constraints;
+                  levels=NBHD_LEVELS)
 
     base_maps = Dict(e => map_histogram(e) for (e, _) in ENDS)
     base_nbhd = Dict(e => nbhd_histogram(e) for (e, _) in ENDS)
@@ -423,9 +573,9 @@ function build_dataflow(path::AbstractString, neighborhood_count::Int; bins::Int
         f = node(TAXIVIS, "TripFilter")
         connect(loader, "result", f, "table")
         connect(c, "result", f, "constraints")
-        QueryModules(c, f, Dict(e => map_histogram(e, f) for (e, _) in ENDS),
-                     [col => histogram(col, lo, hi, nb, f) for (col, (lo, hi, nb, _)) in ATTRS],
-                     Dict(e => nbhd_histogram(e, f) for (e, _) in ENDS))
+        QueryModules(c, f, Dict(e => map_histogram(e, f, c) for (e, _) in ENDS),
+                     [col => chart(col, lo, hi, nb, f, c) for (col, (lo, hi, nb, _)) in attrs],
+                     Dict(e => nbhd_histogram(e, f, c) for (e, _) in ENDS))
     end
-    return Dataflow(p, loader, view, base_maps, base_nbhd, queries)
+    return Dataflow(p, loader, view, base_maps, base_nbhd, queries, attrs, total)
 end

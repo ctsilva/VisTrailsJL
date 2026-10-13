@@ -2,8 +2,13 @@
 Progressive TaxiVis on VisTrailsJL.
 
     julia --project=julia julia/examples/taxivis/prepare_data.jl     # once (needs ~/data/FOIL2013)
-    julia --project=julia --threads=auto julia/examples/taxivis/app.jl [--workers N] [--port 8767]
-                                                                       [--bins 512] [--rate ROWS_PER_S] [--throttle ROWS] [--rows N]
+    julia --project=julia --threads=auto julia/examples/taxivis/app.jl [--year] [--accuracy 0.99] [--tolerance 3]
+                       [--workers N] [--port 8767] [--bins 512] [--rate ROWS_PER_S] [--throttle ROWS] [--rows N]
+
+`--year`: the whole of 2013 (`prepare_data.jl --year`), else January.
+`--accuracy A`, `--tolerance T` (default 0.99, 3): stop loading once A of
+the trips in every display lie in bins that more data could not change by
+more than T color levels or pixels (95% intervals); accuracy 0 loads all.
 
 then open http://127.0.0.1:8767/ (this machine only). Ctrl-C stops it.
 """
@@ -13,8 +18,9 @@ using VisTrailsJL
 include(joinpath(@__DIR__, "TaxiVis.jl"))
 using .TaxiVis
 
-arrow_path(rows=nothing) = joinpath(@__DIR__, "data", "taxivis_2013_01_stratified" *
-                                    (rows === nothing ? "" : "_$rows") * ".arrow")
+arrow_path(rows=nothing; year=false) =
+    joinpath(@__DIR__, "data", (year ? "taxivis_2013_random" : "taxivis_2013_01_stratified") *
+                               (rows === nothing ? "" : "_$rows") * ".arrow")
 
 function option(name, default)
     i = findfirst(==("--$name"), ARGS)
@@ -23,12 +29,14 @@ end
 
 function main()
     rows = option("rows", nothing)
-    path = arrow_path(rows)
+    year = "--year" in ARGS
+    path = arrow_path(rows; year=year)
     isfile(path) || error("$path not found: run julia/examples/taxivis/prepare_data.jl" *
-                          (rows === nothing ? "" : " --rows $rows"))
+                          (year ? " --year" : "") * (rows === nothing ? "" : " --rows $rows"))
     workers = option("workers", Threads.nthreads())
     app = start_app(path; workers=workers, bins=option("bins", 512), throttle=option("throttle", 0),
-                    rate=option("rate", 0.0))
+                    rate=option("rate", 0.0), accuracy=option("accuracy", 0.99),
+                    tolerance=option("tolerance", 3.0))
     port = option("port", 8767)
     server = serve(app; port=port)
     println("open http://127.0.0.1:$port/  ($(app.total) trips, $workers workers, " *

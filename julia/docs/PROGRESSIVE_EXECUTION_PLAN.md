@@ -415,3 +415,42 @@ Import its module catalog as descriptors, or drive it as an external engine.
   `converged` when more data would not visibly change its display (e.g.
   99% of non-empty bins with a 95% interval within one color level); the
   page shows estimated counts (count × N/n) and the share of trips read.
+- 2026-10-13: Accuracy in TaxiVis (step 4), and two engine refinements it
+  required. (1) Backpressure: on the year, the loader (a memcpy) ran to
+  105 M rows while the 512² map histograms had binned 14 M; they had not
+  converged because they were behind. A module now wants *more* data only
+  if it consumed its input; running modules use the backlog recorded after
+  their last step, or a producer step completed since theirs started (a
+  step clock). Without the clock a 2 ms consumer let the source run 27
+  steps ahead; without backpressure, all the way. (2) Control vs data:
+  value/dict subscriptions always step a module; table rows only while it
+  needs data. Without it, a zoom made the converged maps rescan all 173 M
+  loaded rows (73 s).
+
+  TaxiVis: `TripHistogram` converges when `accuracy` (0.99) of its trips
+  are in bins whose 95% interval moves by at most `tolerance` (3) color
+  levels (maps, neighborhoods: log scale) or pixels (charts, per drawn
+  point; days for the year's time series), with the finite population
+  correction. Tolerance chosen from measurements on the year (all-trips
+  pickup map at 99%): 1 level needs 65% of the trips, 2: 30%, 3: 17%, 4:
+  10%; without the correction 1 level never converges (1.5% unstable with
+  all data). What is not shown has converged: disabled queries, maps of the
+  end not shown (the mode is in the view Variable). Query histograms take
+  rows read from their filter's progress (a bug: they used rows loaded, so
+  once the year was loaded a rare query "converged" on 50 trips). Server:
+  counts scaled to estimates (× trips / trips read), maps rendered from
+  estimates, complete = converged or all processed.
+
+  Measured (8 threads, year, `--year`): converged at 18.2% (31.5 M trips)
+  7 s after start, 5.5 GB resident (vs ~20 GB to load all); Financial
+  District weekend nights: estimate within 1% from about 5 s, query maps
+  need all trips (complete 51 s, loading resumed); rare query (fare
+  \$50-60): exact count 49,010 after a full scan, 1.8 s; zoom to lower
+  Manhattan: first results 0.43 s, complete 45 s (rescans all rows).
+  Engine and execution suites pass.
+
+  Open points: map histograms scan ~3 M rows/s each (a zoom over 173 M
+  rows takes 45 s): data-parallel binning would help; tolerance is global
+  (could follow the display: a JND model); neighborhoods count even when
+  the neighborhood layer is hidden (the page's layer is not sent to the
+  server).

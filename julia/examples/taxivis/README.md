@@ -8,14 +8,23 @@ HTTP API; the dataflow is a VisTrailsJL `Pipeline` run by the
 `ProgressiveEngine` (`docs/EXECUTION.md`). Up to three colored queries
 select trips by pickup and dropoff region (rectangles or neighborhoods),
 days of the week, hours of the day and attribute ranges; every view updates
-while the 14.8 million trips of January 2013 stream in, and every
-interaction restarts a progressive computation instead of blocking.
+while the trips stream in (14.8 million for January 2013, 173 million for
+the year), and every interaction restarts a progressive computation instead
+of blocking.
+
+Beyond ProgressiVis' version: **loading stops once the displays converge**.
+Trips arrive in random (or stratified) order, so what has been read is a
+sample: counts are shown as estimates for all trips, and the loader reads
+only while some display could still visibly change (see
+[Accuracy](#accuracy)). On the year, that is 18% of the trips until a
+query or a zoom needs more.
 
 ## Requirements
 
-- The FOIL 2013 data preprocessed by TaxiVis, locally: a directory with
-  `processed/2013_01.kdtrip` (default `~/data/FOIL2013`, or set `FOIL2013`).
-  Nothing is downloaded.
+- The FOIL 2013 data, locally (default `~/data/FOIL2013`, or set
+  `FOIL2013`): for January, TaxiVis' preprocessed `processed/2013_01.kdtrip`;
+  for the year, the raw `Tripdata_2013/trip_data_M.csv` and
+  `Faredata_2013/trip_fare_M.csv`. Nothing is downloaded.
 - A web browser. The page uses no external libraries or map tiles.
 
 ## Running
@@ -30,25 +39,32 @@ julia --project=julia --threads=auto julia/examples/taxivis/prepare_data.jl
 # data/taxivis_2013_random.arrow, 173 M trips in random order (10.7 GB, ~9 min, 10 GB of memory)
 julia --project=julia --threads=auto julia/examples/taxivis/prepare_data.jl --year
 
-# start the dataflow and the local server
-julia --project=julia --threads=auto julia/examples/taxivis/app.jl
+# start the dataflow and the local server (add --year for the year)
+julia --project=julia --threads=auto julia/examples/taxivis/app.jl --year
 
 # then open
 open http://127.0.0.1:8767/
 ```
 
-The server listens on 127.0.0.1 only; Ctrl-C stops it. At full speed the
-month is loaded before the page opens; to watch it arrive, use
-`--rate 250000` (about 1 minute). On 8 threads the
-month loads in about 3 s and all summaries are complete about 10 s after
-start (including compilation); a neighborhood/weekday/hour query over all
-trips completes in about 4 s, with first results (backend latency) in about
-0.25 s. Individual observations, not a benchmark.
+The server listens on 127.0.0.1 only; Ctrl-C stops it. To watch loading
+arrive, use `--rate 250000` (rows per second). Individual observations
+on 8 threads, not a benchmark:
+
+- **Year** (default accuracy): displays converged after 31.5 M trips
+  (18%), 7 s after start, 5.5 GB resident. Financial District pickups on
+  weekend nights: first results 0.24 s, estimate within 1% after about 5 s;
+  the query's maps then needed all trips (loading resumed; complete in
+  51 s). A zoom: first results 0.43 s, complete in 45 s.
+- **January**, `--accuracy 0` (every trip): loads in about 3 s, complete
+  about 10 s after start; the query above completes in about 4 s.
 
 Options of `app.jl`:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
+| `--year` | off | the year (`prepare_data.jl --year`), else January |
+| `--accuracy A` | 0.99 | share of each display's trips that must be in stable bins; 0: read every trip |
+| `--tolerance T` | 3 | color levels (maps) or pixels (charts) a stable bin may still move (95% interval) |
 | `--workers N` | threads | `ProgressiveEngine` workers |
 | `--port P` | 8767 | HTTP port |
 | `--bins B` | 512 | map resolution (B x B) |
@@ -57,14 +73,36 @@ Options of `app.jl`:
 | `--rows N` | all | use the N-row file written by `prepare_data.jl --rows N` |
 
 The page (`static/index.html`, `static/client.js`) is ProgressiVis' page,
-unchanged; see its README for how to use it.
+with the period (January or the year: daily points, computed weekends,
+month ticks) and the status of a converged run (counts shown as `≈`); see
+ProgressiVis' README for how to use it.
+
+## Accuracy
+
+Each `TripHistogram` knows how the page draws it, and reports
+`converged` (the engine's hook, `docs/EXECUTION.md`, "Convergence") once
+more trips could not visibly change it:
+
+- counts from `n` of `N` trips are a simple random sample: a bin with
+  count `c` has relative error √((1 − n/N)/c) (0 once every trip was read);
+- maps and neighborhoods are drawn in log scale: a bin is stable when its
+  95% interval moves its color by at most `tolerance` levels; charts are
+  linear: a drawn point (a day, for the year's time series) is stable when
+  its height moves by at most `tolerance` pixels;
+- a display has converged when `accuracy` of its trips are in stable bins.
+
+What is not shown has converged: disabled queries, and maps of the end not
+shown in the current mode (Pickups, Dropoffs, Both). The engine then stops
+the loader; a query, a zoom or a mode change that unsettles a display
+resumes it. Measured on the year (all-trips pickup map, 99% stable):
+tolerance 1 needs 65% of the trips, 2: 30%, 3: 17%, 4: 10%.
 
 ## Dataflow
 
 ```
 ArrowLoader ─┬─ TripHistogram × 4 (all trips: pickup/dropoff maps, neighborhoods)
              └─ TripFilter_q ── TripHistogram_q × 9 (maps, 5 attributes, neighborhoods)
-   Variable (view bounds) ──► map histograms
+   Variable (view bounds, mode) ──► map histograms
    Variable (constraints_q) ──► TripFilter_q                       for q = 1, 2, 3
 ```
 
@@ -72,8 +110,9 @@ ArrowLoader ─┬─ TripHistogram × 4 (all trips: pickup/dropoff maps, neighb
 filters, 8 map, 15 attribute and 8 neighborhood histograms.
 
 - `ArrowLoader` (package `progressive`) appends the memory-mapped rows of
-  the Arrow file to a `ProgressiveTable`, in stratified order, so every
-  prefix is a sample spread over time and place.
+  the Arrow file to a `ProgressiveTable`, in stratified (January) or random
+  (year) order, so every prefix is a sample spread over time and place; it
+  pauses while no display needs more trips.
 - A query edit validates the request (`normalize_query`), then
   `set_variable!` sets the query's constraints `Variable`; this gives the
   filter and its histograms interactive priority.
@@ -83,8 +122,8 @@ filters, 8 map, 15 attribute and 8 neighborhood histograms.
   its `revision` output and rescans from the first trip.
 - `TripHistogram` counts the values of its selection (read with `gather`)
   or of all trips, and after every step publishes an immutable `Summary`
-  tagged with the query revision it counts; map histograms rebin when the
-  view bounds change.
+  tagged with the query revision it counts and whether it converged; map
+  histograms rebin when the view bounds change.
 - The server (`server.jl`) reads summaries for `/state` and `/map.png`, and
   reports a query or the view as ready when every summary it needs carries
   the current revision.
@@ -109,13 +148,18 @@ Endpoints, request and response JSON are those of ProgressiVis' `app.py`:
 
 ## Validation
 
-The Arrow file matches ProgressiVis' Parquet file column by column
-(SHA-256 of every column). Financial District pickups on weekend nights
-(Sat and Sun, 22-2 h) count 11,658 trips in the app and in NumPy over the
-Parquet file. Browser interaction has not been checked yet.
+The January Arrow file matches ProgressiVis' Parquet file column by column
+(SHA-256 of every column); the year's CSV path gives exactly the same
+January values (every column equal as a multiset). Financial District
+pickups on weekend nights (Sat and Sun, 22-2 h) count 11,658 trips in
+January with `--accuracy 0`, as NumPy counts over the Parquet file. The
+page was checked in a browser for January before the accuracy changes.
 
 ## Limits
 
-- One month (January 2013), as in ProgressiVis.
-- No automated tests for the example yet (the `ArrowLoader` and `gather`
-  it relies on are tested in `test/progressive/`).
+- Map histograms bin about 3 M trips per second each: a zoom on the year
+  rescans the loaded trips (45 s to complete; first results in under 0.5 s).
+- Neighborhood histograms are computed even when that layer is hidden
+  (the page's layer is not sent to the server).
+- No automated tests for the example itself (the engine's convergence,
+  `ArrowLoader` and `gather` are tested in `test/progressive/`).

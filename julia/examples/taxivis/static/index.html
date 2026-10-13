@@ -59,7 +59,7 @@ body.light #view{background:#fff}body.light #badge{background:rgba(255,255,255,.
 body.light #tip{background:rgba(255,255,255,.95);border-color:#bbb}
 body.light .chart-note,body.light .legend{color:#666}body.light .error{color:#b3261e}
 </style></head><body>
-<div class="top"><h1>Progressive TaxiVis — NYC taxi trips, January 2013</h1>
+<div class="top"><h1 id="title">Progressive TaxiVis — NYC taxi trips, 2013</h1>
 <span class="status" id="status">connecting…</span></div>
 <div id="error" class="error" role="alert"></div>
 <div class="bar"><div id="fill"></div></div>
@@ -287,18 +287,24 @@ function drawChart(col){const c=cv[col],g=c.getContext('2d'),a=st.attrs[col],P=p
  const w=c.width-P.l-P.r,h=c.height-P.t-P.b, norm=$('norm').checked&&col!=='hour';
  g.clearRect(0,0,c.width,c.height);
  const X=v=>P.l+(v-a.min)/(a.max-a.min)*w;
- if(col==='hour'){g.fillStyle=T.weekend;// weekends: Jan 5-6, 12-13, 19-20, 26-27 2013
-  for(const d of [4,11,18,25])g.fillRect(X(d*24),P.t,X((d+2)*24)-X(d*24),h);}
- const series=st.queries.map((q,i)=>{const arr=q.hists[col];if(!arr||!specs[i].enabled||!usable(i))return null;
-  const s=arr.reduce((p,v)=>p+v,0);return norm&&s>0?arr.map(v=>v/s):arr;});
+ const days=Math.round((a.max-a.min)/24), daily=col==='hour'&&a.bins>2*w;// long periods: one point per day
+ if(col==='hour'){g.fillStyle=T.weekend;// weekends (Monday = 0; Jan 1 2013 was a Tuesday)
+  for(let d=0;d<days;d++)if((d+FIRST_WEEKDAY)%7===5)g.fillRect(X(d*24),P.t,X(Math.min(days,d+2)*24)-X(d*24),h);}
+ const perDay=arr=>{const out=Array(Math.ceil(arr.length/24)).fill(0);arr.forEach((v,k)=>out[Math.floor(k/24)]+=v);return out;};
+ const series=st.queries.map((q,i)=>{let arr=q.hists[col];if(!arr||!specs[i].enabled||!usable(i))return null;
+  if(daily)arr=perDay(arr);const s=arr.reduce((p,v)=>p+v,0);return norm&&s>0?arr.map(v=>v/s):arr;});
  let ymax=0;series.forEach(s=>{if(s)for(const v of s)ymax=Math.max(ymax,v);});
  const sp=specs[active].attrs[col];
  if(sp){g.fillStyle=`rgba(${T.shade},.10)`;g.fillRect(X(sp[0]),P.t,X(sp[1])-X(sp[0]),h);}
  if(brush[col]){g.fillStyle=`rgba(${T.shade},.18)`;const b=brush[col];g.fillRect(Math.min(b.x,b.x2),P.t,Math.abs(b.x2-b.x),h);}
  g.strokeStyle=T.axis;g.beginPath();g.moveTo(P.l,P.t);g.lineTo(P.l,P.t+h);g.lineTo(P.l+w,P.t+h);g.stroke();
  g.fillStyle=T.text;g.font='11px system-ui';g.textAlign='center';
- const ticks=col==='hour'?[...Array(32).keys()].filter(d=>d%5===0).map(d=>d*24):niceTicks(a.min,a.max,6);
- ticks.forEach(t=>{g.fillText(col==='hour'?'Jan '+(t/24+1):String(t),X(t)+(col==='hour'?12:0),P.t+h+14);});
+ const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+ const dayLabel=t=>{const d=new Date(monthStart+t*3600000);return MONTHS[d.getUTCMonth()]+' '+d.getUTCDate();};
+ const ticks=col!=='hour'?niceTicks(a.min,a.max,6):days>62?
+  MONTHS.map((_,m)=>(Date.UTC(2013,m,1)-monthStart)/3600000).filter(t=>t<a.max):
+  [...Array(days).keys()].filter(d=>d%5===0).map(d=>d*24);
+ ticks.forEach(t=>{g.fillText(col!=='hour'?String(t):days>62?dayLabel(t).split(' ')[0]:dayLabel(t),X(t)+(col==='hour'?12:0),P.t+h+14);});
  g.textAlign='right';if(ymax>0){g.fillText(norm?(100*ymax).toFixed(ymax<0.1?1:0)+'%':fmt(Math.round(ymax)),P.l-4,P.t+9);g.fillText('0',P.l-4,P.t+h);}
  series.forEach((s,i)=>{if(!s||ymax<=0)return;g.strokeStyle=st.queries[i].color;g.lineWidth=i===active?1.8:1.2;g.beginPath();
   const bw=w/s.length;s.forEach((v,k)=>{const x=P.l+k*bw,y=P.t+h-v/ymax*h;if(k===0)g.moveTo(x,y);else g.lineTo(x,y);g.lineTo(x+bw,y);});g.stroke();});
@@ -316,7 +322,7 @@ function describe(sp){const parts=[];
  return parts.join(' · ');}
 function drawAll(){if(!st)return;COLS.forEach(drawChart);drawRecurrent();
  $('qtable').innerHTML=st.queries.map((q,i)=>{const sp=specs[i];
-  return `<tr><td><span class="sw" style="background:${q.color}"></span>Query&nbsp;${i+1}</td><td>${sp.enabled?(usable(i)?fmt(q.count)+'&nbsp;trips · '+(q.complete?'complete':q.ready?'refining '+Math.min(100,100*q.scanned/Math.max(1,st.total)).toFixed(0)+'%':'updating'):'sending…'):'—'}</td><td style="color:${T.text}">${describe(sp)}</td></tr>`;}).join('');
+  return `<tr><td><span class="sw" style="background:${q.color}"></span>Query&nbsp;${i+1}</td><td>${sp.enabled?(usable(i)?(st.rows<st.total?'≈':'')+fmt(q.count)+'&nbsp;trips · '+(q.complete?(st.rows<st.total?'converged':'complete'):q.ready?'refining '+Math.min(100,100*q.scanned/Math.max(1,st.total)).toFixed(0)+'%':'updating'):'sending…'):'—'}</td><td style="color:${T.text}">${describe(sp)}</td></tr>`;}).join('');
  const container=$('constraints');container.replaceChildren();const sp=specs[active];
  const chip=(label,remove)=>{const b=document.createElement('button');b.className='chip';b.textContent=label+' ×';b.setAttribute('aria-label','Remove '+label);b.onclick=()=>{remove();sendQuery();};container.appendChild(b);};
  for(const end of ENDS){if(sp[end])chip(end+' rectangle',()=>sp[end]=null);
@@ -349,8 +355,11 @@ async function poll(){if(polling)return;polling=true;
   document.querySelectorAll('#mode button').forEach(x=>x.classList.toggle('on',x.dataset.m===st.mode));
   const pct=100*st.rows/Math.max(1,st.total);$('fill').style.width=Math.min(100,pct)+'%';
   const pending=busy.some(Boolean)||st.pending||st.queries.some((q,i)=>!usable(i));
+  if(st.period)$('title').textContent='Progressive TaxiVis — NYC taxi trips, '+st.period;
   $('status').textContent=`${fmt(st.rows)} of ${fmt(st.total)} trips loaded (${pct.toFixed(1)}%) · `+
-   (st.complete?'all results complete':st.loading_done?'data loaded; queries refining':'loading')+
+   (st.converged?'results converged: loading paused, counts estimated from the sample':
+    st.complete?'all results complete':st.loading_done?'data loaded; queries refining':
+    st.loading_paused?'loading paused; queries refining':'loading')+
    (displayedMs===null?'':` · first displayed results ${displayedMs} ms`);
   $('badge').style.display=pending?'block':'none';drawOverlay();drawAll();
   const token=JSON.stringify([edits,viewEdits,st.queries.map(q=>q.revision),st.view_revision]);

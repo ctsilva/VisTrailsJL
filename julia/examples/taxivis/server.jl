@@ -41,18 +41,21 @@ mutable struct App
 end
 
 """
-    start_app(path; workers, bins, throttle, rate) -> App
+    start_app(path; workers, bins, throttle, rate, accuracy, tolerance) -> App
 
 Build the dataflow over the trips in the Arrow file `path` and start it.
+With `accuracy > 0` (default 0.99), loading pauses once no display would
+visibly change (see `build_dataflow`).
 """
 function start_app(path::AbstractString; workers::Int=Threads.nthreads(), bins::Int=512, throttle::Int=0,
-                   rate::Real=0)
+                   rate::Real=0, accuracy::Real=0.99, tolerance::Real=DEFAULT_TOLERANCE)
     regions = load_regions()
-    flow = build_dataflow(path, length(regions); bins=bins, throttle=throttle, rate=rate)
+    flow = build_dataflow(path, length(regions); bins=bins, throttle=throttle, rate=rate,
+                          accuracy=accuracy, tolerance=tolerance)
     pr = start!(ProgressiveEngine(workers=workers), flow.pipeline; enable_logging=false)
     queries = [QueryState(i, COLORS[i], normalize_query(Dict{String, Any}(), length(regions)), 0,
                           nothing, nothing, flow.queries[i]) for i in 1:3]
-    total = module_progress(pr.run, flow.loader.id)[2]
+    total = flow.total
     return App(flow, regions, pr, queries, copy(NYC), "pickup", time(), 0, nothing, nothing,
                bins, workers, total, ReentrantLock(), ReentrantLock())
 end
@@ -70,23 +73,32 @@ end
 
 loaded_rows(app::App) = last_id(output(app, app.flow.loader))
 loading_done(app::App) = module_status(app.pr.run, app.flow.loader.id) == :done
+loading_paused(app::App) = is_paused(app.pr.run, app.flow.loader.id)
+
+# Counts from a sample of `read` trips, scaled to estimates for all trips
+scale(app::App, read::Int) = app.total / max(read, 1)
+estimate(values, s) = round.(Int, values .* s)
 filter_progress(app::App, q::QueryState) = current_value(output(app, q.modules.filter, "progress"))
 
 view_tuple(view) = (view["x0"], view["x1"], view["y0"], view["y1"])
 
-# A map layer for the current view, rows north first (nothing if not computed yet)
-function map_layer(app::App, m::ModuleInstance, view, revision::Int=0)
+# A map layer for the current view, rows north first, as estimated counts
+# for all trips (nothing if not computed yet); `read`: trips the counts are
+# from (default: the histogram's own, for all trips)
+function map_layer(app::App, m::ModuleInstance, view, revision::Int=0, read=nothing)
     pub = published(app, m)
     (pub === nothing || pub.revision != revision || pub.bounds != view_tuple(view)) && return nothing
-    return reverse(pub.values, dims=1)
+    return reverse(pub.values, dims=1) .* scale(app, something(read, pub.processed))
 end
 
 """
     query_snapshot(app, q, rows, done, view) -> Dict
 
 One query's part of `/state`: counts, histograms, readiness (every summary
-has counts for the current revision), completeness (everything processed)
-and latency, as in app.py.
+has counts for the current revision), completeness (everything loaded
+processed, and either all trips loaded or every summary converged) and
+latency, as in app.py. Counts are estimates for all trips: the sample's
+counts scaled by trips / trips scanned.
 """
 function query_snapshot(app::App, q::QueryState, rows::Int, done::Bool, view)
     revision = q.revision
@@ -101,9 +113,13 @@ function query_snapshot(app::App, q::QueryState, rows::Int, done::Bool, view)
     if enabled && current
         ok(p, f) = p !== nothing && p.revision == revision && f(p)
         ready = empty || all(ok(p, p -> p.processed > 0) for p in values(pubs))
-        complete = done && scanned == rows &&
-                   (empty || all(ok(p, p -> p.processed == selected) for p in values(pubs)))
+        # Complete: every summary converged (they may skip trips already
+        # loaded), or all trips loaded and processed
+        converged = !empty && all(ok(p, p -> p.converged) for p in values(pubs))
+        processed_all = done && scanned == rows && (empty || all(ok(p, p -> p.processed == selected) for p in values(pubs)))
+        complete = converged || processed_all
     end
+    s = scale(app, scanned)
     if complete && enabled && !empty
         complete = all(pubs[h.id] !== nothing && pubs[h.id].bounds == view_tuple(view) for h in values(m.maps))
     end
@@ -111,14 +127,14 @@ function query_snapshot(app::App, q::QueryState, rows::Int, done::Bool, view)
     hists, excluded = Dict{String, Any}(), Dict{String, Any}()
     for (col, h) in m.hists
         p = pubs[h.id]
-        nbins = Dict(ATTRS)[col][3]
-        hists[col] = empty && enabled ? zeros(Int, nbins) : usable(p) ? p.values : nothing
-        excluded[col] = empty ? 0 : usable(p) ? max(0, p.processed - sum(p.values)) : nothing
+        nbins = Dict(app.flow.attrs)[col][3]
+        hists[col] = empty && enabled ? zeros(Int, nbins) : usable(p) ? estimate(p.values, s) : nothing
+        excluded[col] = empty ? 0 : usable(p) ? round(Int, max(0, p.processed - sum(p.values)) * s) : nothing
     end
     nbhd = Dict{String, Any}()
     for (end_, h) in m.nbhd
         p = pubs[h.id]
-        nbhd[end_] = empty && enabled ? zeros(Int, length(app.regions)) : usable(p) ? p.values : nothing
+        nbhd[end_] = empty && enabled ? zeros(Int, length(app.regions)) : usable(p) ? estimate(p.values, s) : nothing
     end
     if ready && q.started !== nothing && q.latency_ms === nothing
         ready_at = if !enabled
@@ -132,7 +148,7 @@ function query_snapshot(app::App, q::QueryState, rows::Int, done::Bool, view)
         q.latency_ms = max(0, round(Int, 1000 * (ready_at - q.started)))
     end
     return Dict("color" => q.color, "spec" => q.spec, "revision" => revision,
-                "count" => enabled && current ? selected : 0, "hists" => hists, "nbhd" => nbhd,
+                "count" => enabled && current ? round(Int, selected * s) : 0, "hists" => hists, "nbhd" => nbhd,
                 "excluded" => excluded, "scanned" => current && enabled ? scanned : 0,
                 "ready" => ready, "complete" => complete, "latency_ms" => q.latency_ms)
 end
@@ -161,14 +177,18 @@ function snapshot(app::App)
             "view_latency_ms" => app.view_latency_ms, "queries" => queries,
             "pending" => !view_ready || any(!s["ready"] for s in queries),
             "view_ready" => view_ready,
-            "complete" => done && all(s["complete"] for s in queries) && view_ready &&
-                          (rows == 0 || all((p = published(app, h)) !== nothing && p.processed == rows for h in bases)))
+            "complete" => all(s["complete"] for s in queries) && view_ready &&
+                          (rows == 0 ? done : all((p = published(app, h)) !== nothing &&
+                                            (p.converged || done && p.processed == rows) for h in bases)))
     end
-    all_nbhd = Dict(e => (p = published(app, h)) === nothing ? nothing : p.values for (e, h) in app.flow.base_nbhd)
+    all_nbhd = Dict(e => (p = published(app, h)) === nothing ? nothing : estimate(p.values, scale(app, p.processed))
+                    for (e, h) in app.flow.base_nbhd)
     merge!(st, Dict("rows" => rows, "total" => app.total, "workers" => app.workers, "home" => NYC,
                     "elapsed" => round(time() - app.t0, digits=1), "all_nbhd" => all_nbhd,
-                    "attrs" => Dict(c => Dict("min" => a[1], "max" => a[2], "bins" => a[3], "label" => a[4]) for (c, a) in ATTRS),
-                    "loading_done" => done))
+                    "attrs" => Dict(c => Dict("min" => a[1], "max" => a[2], "bins" => a[3], "label" => a[4]) for (c, a) in app.flow.attrs),
+                    "period" => period_name(app.flow.attrs),
+                    "loading_done" => done, "loading_paused" => !done && loading_paused(app),
+                    "converged" => st["complete"] && rows < app.total))
     return st
 end
 
@@ -210,9 +230,10 @@ function set_view!(app::App, body)
         bounds = bounds === nothing ? app.view : Dict{String, Float64}(bounds)
         mode = get(body, "mode", app.mode)
         changed = bounds != app.view || mode != app.mode
+        # Maps follow the bounds, and compute only while their end is shown
+        changed && set_variable!(app.pr, app.flow.view, view_value(bounds, mode))
         if bounds != app.view
             started = time()
-            set_variable!(app.pr, app.flow.view, copy(bounds))
             lock(() -> (app.view, app.view_started, app.view_latency_ms) = (bounds, started, nothing), app.lock)
         end
         lock(app.lock) do
@@ -238,8 +259,8 @@ function render_map(app::App; light::Bool=false)
          [app.view_revision, (q.revision for q in app.queries)...])
     end
     ends = mode == "both" ? ["pickup", "dropoff"] : [mode]
-    function layer(maps, revision=0)
-        parts = filter(!isnothing, [map_layer(app, maps[e], view, revision) for e in ends])
+    function layer(maps, revision=0, read=nothing)
+        parts = filter(!isnothing, [map_layer(app, maps[e], view, revision, read) for e in ends])
         isempty(parts) ? nothing : sum(parts)
     end
     n = app.bins
@@ -254,7 +275,8 @@ function render_map(app::App; light::Bool=false)
     end
     for (q, enabled, revision) in query_states
         enabled || continue
-        a = layer(q.modules.maps, revision)
+        actual, scanned, _ = filter_progress(app, q)
+        a = actual == revision ? layer(q.modules.maps, revision, scanned) : nothing
         (a === nothing || maximum(a) <= 0) && continue
         alpha = ifelse.(a .> 0, 0.35 .+ 0.65 .* log1p.(a) ./ log1p(maximum(a)), 0.0)
         color = hex_color(q.color)
@@ -321,7 +343,8 @@ json_response(x; status=200) = respond(JSON3.write(x), "application/json"; statu
 function debug_info(app::App)
     run = app.pr.run
     steps = sort([(m.descriptor.name * " " * string(id), module_steps(run, id).steps,
-                   module_steps(run, id).items, string(module_status(run, id)))
+                   module_steps(run, id).items, string(module_status(run, id)),
+                   something(module_converged(run, id), "-"), is_paused(run, id))
                   for (id, m) in run.instances], by=r -> -r[3])
     maps = Dict(string(h.id) => (p = published(app, h)) === nothing ? nothing : sum(p.values)
                 for h in [values(app.flow.base_maps)...; [h for q in app.queries for h in values(q.modules.maps)]])

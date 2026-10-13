@@ -4,6 +4,7 @@ Progressive TaxiVis on VisTrailsJL (see README.md): the example as a module.
 module TaxiVis
 
 using VisTrailsJL
+using Arrow
 
 include("regions.jl")
 include("dataflow.jl")
