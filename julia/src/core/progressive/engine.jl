@@ -186,7 +186,7 @@ end
 
 """
     ProgressiveEngine(; quantum=0.1, step_size=nothing, max_time=Inf, workers=Threads.nthreads(),
-                        interactive_quantum=0.02)
+                        interactive_quantum=0.02, state_cache=nothing)
 
 Runs pipelines progressively: progressive modules in bounded steps of about
 `quantum` seconds each (sized by a time predictor), one-shot modules
@@ -197,6 +197,9 @@ different modules run in parallel on threads (including a producer and its
 consumers); with `workers = 1`, modules step one at a time in sweeps.
 After an input changes (`set_variable!`), the modules downstream of it run
 first, with steps of `interactive_quantum` seconds, until they caught up.
+With a `state_cache` (a `ProgressiveStateCache`), each module's progressive
+state is kept when a run ends and resumed by later runs in which the module
+has the same signature (see `restart!`).
 
 `run!` blocks until every module is done; `start!` runs in the background
 and returns a `ProgressiveRun` to watch, `stop!` and `wait` on.
@@ -207,6 +210,7 @@ Base.@kwdef struct ProgressiveEngine <: Engine
     max_time::Float64 = Inf
     workers::Int = Threads.nthreads()
     interactive_quantum::Float64 = 0.02
+    state_cache::Any = nothing   # a ProgressiveStateCache: keep module states across runs
 end
 
 """
@@ -254,6 +258,7 @@ A progressive run in the background (from `start!`). `pr.run` is the
 struct ProgressiveRun
     run::PipelineRun
     task::Task
+    engine::ProgressiveEngine
 end
 
 """
@@ -266,10 +271,10 @@ Results are readable from `pr.run.outputs` while it runs. Its input modules
 function start!(engine::ProgressiveEngine, pipeline::Pipeline;
                 observers=ExecutionObserver[], enable_logging::Bool=true)
     run = PipelineRun(pipeline; observers=observers, enable_logging=enable_logging)
-    state = setup_progressive!(run)
+    state = setup_progressive!(run, engine)
     @atomic state.inputs_open = true
     task = @async execute_run!(engine, run)
-    return ProgressiveRun(run, task)
+    return ProgressiveRun(run, task, engine)
 end
 
 """
@@ -390,14 +395,29 @@ module_steps(run::PipelineRun, id::Int) =
 # Setup: create every module's context, subscriptions and outputs, in
 # topological order so that producers' outputs exist before consumers subscribe
 
-function setup_progressive!(run::PipelineRun)
+function setup_progressive!(run::PipelineRun, engine=nothing)
     run.engine_state isa ProgressiveState && return run.engine_state
+    cache = engine === nothing ? nothing : engine.state_cache
     state = ProgressiveState(Dict{Int, ModuleProgress}(), 0, false, Tuple{Int, Any, Any}[],
                              false, Channel{Int}(Inf), Set{Int}(), 0.0)
     run.engine_state = state
 
     for id in run.order
         mod = run.instances[id]
+        resumed = resume_state!(cache, run, state, id)
+        if resumed !== nothing
+            state.modules[id] = resumed
+            push!(run.reused, id)
+            if resumed.status == :done && run.workflow_exec !== nothing
+                # Finished in an earlier run: logged as reused, with its progress
+                mod_exec = new_module_exec(run, mod)
+                annotate_progress!(mod_exec, run, id, resumed)
+                mod_exec.annotations["resumed"] = "true"
+                mark_cached!(mod_exec)
+                lock(() -> add_module_exec!(run.workflow_exec, mod_exec), run.lock)
+            end
+            continue
+        end
         run.outputs[id] = Dict{String, Any}()
         ctx = StepContext(run, mod, Dict{String, Vector{Any}}(),
                           Dict{String, Vector{AbstractSubscription}}(), Int[], run.outputs[id])
@@ -436,11 +456,16 @@ end
 finished(status::Symbol) = status in (:done, :failed, :cancelled)
 
 function schedule_modules!(engine::ProgressiveEngine, run::PipelineRun)
-    state = setup_progressive!(run)
-    if engine.workers <= 1
-        schedule_serial!(engine, run, state)
-    else
-        schedule_parallel!(engine, run, state)
+    state = setup_progressive!(run, engine)
+    try
+        if engine.workers <= 1
+            schedule_serial!(engine, run, state)
+        else
+            schedule_parallel!(engine, run, state)
+        end
+    finally
+        log_unfinished!(run, state)
+        engine.state_cache === nothing || park_states!(engine.state_cache, run, state)
     end
 
     if !isempty(state.failures)
@@ -655,6 +680,7 @@ function run_step!(engine, run::PipelineRun, state::ProgressiveState, id::Int,
     if !progress.started
         progress.started = true
         progress.mod_exec = new_module_exec(run, mod)
+        progress.mod_exec !== nothing && id in run.reused && (progress.mod_exec.annotations["resumed"] = "true")
         notify_observers(on_module_start, run, mod)
     end
 
@@ -684,10 +710,10 @@ function complete!(run::PipelineRun, id::Int, progress::ModuleProgress)
     progress.status = :done
     mod = progress.context.mod
     if progress.mod_exec !== nothing
-        progress.mod_exec.annotations["steps"] = string(progress.steps)
-        progress.mod_exec.annotations["items"] = string(progress.items)
+        annotate_progress!(progress.mod_exec, run, id, progress)
         mark_completed!(progress.mod_exec)
         lock(() -> add_module_exec!(run.workflow_exec, progress.mod_exec), run.lock)
+        progress.mod_exec = nothing
     end
     notify_observers(on_module_done, run, mod, run.outputs[id])
 end
@@ -696,8 +722,10 @@ function fail!(run::PipelineRun, state::ProgressiveState, id::Int, progress::Mod
     progress.status = :failed
     lock(() -> push!(state.failures, (id, e, bt)), run.lock)
     if progress.mod_exec !== nothing
+        annotate_progress!(progress.mod_exec, run, id, progress)
         mark_failed!(progress.mod_exec, string(e))
         lock(() -> add_module_exec!(run.workflow_exec, progress.mod_exec), run.lock)
+        progress.mod_exec = nothing
     end
     notify_observers(on_module_error, run, progress.context.mod, e)
 end
@@ -776,4 +804,137 @@ function one_shot_step!(run::PipelineRun, ctx::StepContext, progress::ModuleProg
     end
     progress.state = true  # computed
     return StepResult(:blocked, 1)
+end
+
+# Progressive state kept across runs (VisTrails caching for progressive modules)
+
+"""
+    ProgressiveStateCache(; max_entries=256)
+
+Keeps the progressive state of modules when a run ends (finished, stopped
+or failed elsewhere), keyed by subpipeline signature. A later run with the
+same engine resumes a module from its kept state, outputs and input
+positions, if the module has the same signature and all its producers were
+resumed too; other modules start from scratch and read their inputs from
+the beginning. Least recently kept states are dropped beyond `max_entries`.
+"""
+mutable struct ProgressiveStateCache
+    entries::Dict{String, ModuleProgress}
+    order::Vector{String}   # least recently kept first
+    max_entries::Int
+    lock::ReentrantLock
+end
+
+ProgressiveStateCache(; max_entries::Int=256) =
+    ProgressiveStateCache(Dict{String, ModuleProgress}(), String[], max_entries, ReentrantLock())
+
+Base.length(c::ProgressiveStateCache) = @lock c.lock length(c.entries)
+
+function Base.empty!(c::ProgressiveStateCache)
+    @lock c.lock begin
+        foreach(release_subscriptions!, values(c.entries))
+        empty!(c.entries); empty!(c.order)
+    end
+    return c
+end
+
+release_subscriptions!(p::ModuleProgress) =
+    foreach(unsubscribe!, (sub for subs in values(p.context.subscriptions) for sub in subs))
+
+function park_states!(cache::ProgressiveStateCache, run::PipelineRun, state::ProgressiveState)
+    @lock cache.lock begin
+        for id in run.order
+            progress = state.modules[id]
+            progress.status in (:failed, :cancelled) && continue
+            run.reusable[id] || continue
+            signature = run.signatures[id]
+            haskey(cache.entries, signature) && continue   # an identical module was kept already
+            cache.entries[signature] = progress
+            push!(cache.order, signature)
+        end
+        while length(cache.order) > cache.max_entries
+            dropped = popfirst!(cache.order)
+            release_subscriptions!(pop!(cache.entries, dropped))
+        end
+    end
+end
+
+function resume_state!(cache, run::PipelineRun, state::ProgressiveState, id::Int)
+    cache isa ProgressiveStateCache || return nothing
+    run.reusable[id] || return nothing
+    producers = unique(c.source_module_id for c in get_connections_to(run.pipeline, id))
+    all(p -> p in run.reused, producers) || return nothing   # inputs must be the same containers
+
+    signature = run.signatures[id]
+    progress = @lock cache.lock begin
+        p = pop!(cache.entries, signature, nothing)
+        p === nothing || filter!(!=(signature), cache.order)
+        p
+    end
+    progress === nothing && return nothing
+
+    # Rebind to this run (module ids may differ between versions)
+    ctx = progress.context
+    ctx.run = run
+    ctx.mod = run.instances[id]
+    ctx.producers = producers
+    run.outputs[id] = ctx.outputs
+    progress.started = false
+    progress.mod_exec = nothing
+    return progress
+end
+
+"""
+    restart!(pr::ProgressiveRun, pipeline; observers=[], enable_logging=true) -> ProgressiveRun
+
+A live edit: stop the run and start `pipeline` (typically an edited version
+of it) with the same engine. With a `state_cache`, every module whose
+signature did not change continues where it was; edited modules and their
+downstream start over. Inputs stay open as in `start!`.
+"""
+function restart!(pr::ProgressiveRun, pipeline::Pipeline;
+                  observers=pr.run.observers, enable_logging::Bool=true)
+    stop!(pr)
+    wait(pr)
+    return start!(pr.engine, pipeline; observers=observers, enable_logging=enable_logging)
+end
+
+# Progress of partial results
+
+"""
+    progress(state) -> Union{Nothing, Tuple{Int, Int}}
+
+How far a progressive module is, as `(done, total)` in its own unit (rows
+produced, rows consumed of those available, bytes read), or `nothing` if
+unknown. Module types may extend it.
+"""
+progress(state) = nothing
+
+"""
+    module_progress(run::PipelineRun, id) -> Union{Nothing, Tuple{Int, Int}}
+
+The progress of a module in a progressive run (see `progress`).
+"""
+module_progress(run::PipelineRun, id::Int) = progress(run.engine_state.modules[id].state)
+
+function annotate_progress!(mod_exec::ModuleExec, run::PipelineRun, id::Int, p::ModuleProgress)
+    mod_exec.annotations["steps"] = string(p.steps)
+    mod_exec.annotations["items"] = string(p.items)
+    mod_exec.annotations["status"] = string(p.status)
+    pr = progress(p.state)
+    pr === nothing || (mod_exec.annotations["progress"] = "$(pr[1])/$(pr[2])")
+end
+
+# Record modules that started but did not finish (a stopped run): their
+# results are partial, and the log says how far they got
+function log_unfinished!(run::PipelineRun, state::ProgressiveState)
+    for id in run.order
+        p = state.modules[id]
+        (p.mod_exec === nothing || finished(p.status)) && continue
+        annotate_progress!(p.mod_exec, run, id, p)
+        p.mod_exec.annotations["partial"] = "true"
+        p.mod_exec.ts_end = now()
+        lock(() -> add_module_exec!(run.workflow_exec, p.mod_exec), run.lock)
+        p.mod_exec = nothing
+    end
 end

@@ -1,6 +1,6 @@
 # Progressive Execution Plan for VisTrailsJL
 
-Status: Phases 0-4 and 5a done (branch `progressive-engine`). Started 2026-10-13.
+Status: Phases 0-5 done (branch `progressive-engine`); Phase 6 (ProgressiVis interop) optional. Started 2026-10-13.
 
 ## Goal
 
@@ -322,3 +322,39 @@ Import its module catalog as descriptors, or drive it as an external engine.
   shared event channel and reserved slot, 7-109 ms: the parallel scheduler
   was blocked waiting for a background step to complete, and all workers
   were busy.
+- 2026-10-13: Phase 5b done. `ProgressiveStateCache` on the engine:
+  `park_states!` keeps every non-failed, reusable module's `ModuleProgress`
+  (state, outputs, subscriptions, predictor) by subpipeline signature when a
+  run ends; `setup_progressive!` resumes a module when its signature matches
+  and all its producers were resumed (its subscriptions are on their
+  containers), rebinding it to the new run's module ids; LRU eviction
+  unsubscribes dropped states. `restart!(pr, pipeline)` = stop, wait, start
+  with the same engine: live graph edits. `Variable` is not cacheable (its
+  value is not in its signature). Provenance: `progress(state)` hook and
+  `module_progress`; `ModuleExec` annotations steps/items/status/progress;
+  unfinished modules of stopped runs logged as partial; resumed modules
+  annotated (finished ones logged as cached). `ExecutionHistory` observer
+  exports ProgressiVis' execution-history JSON (schema 1; a zero-work
+  terminating record for modules that finish without a :done step), checked
+  with the viewer's own `model.js` parser under Node. `VersionRecorder`
+  turns `set_variable!` calls into a chain of versions with
+  change-parameter operations. `add_version!` takes `operations`; new ids
+  are max+1 (length+1 could collide in trees loaded with gaps).
+  Tests: `test/progressive/test_provenance.jl` (resume after an edit with 1
+  and 4 workers: source continues into the same table, edited modules start
+  over, reruns step nothing, switching back resumes a half-done module;
+  eviction; Variables; progress and partial logging; history export and
+  viewer validation; versions). Suite 29/29.
+
+  The first eviction test did not catch a sabotaged producer rule (resume a
+  consumer whose producer was not resumed): with complete, deterministic
+  data the stale table gives the same answer. The added test keeps a
+  consumer of a *stopped* run while evicting its source; sabotaged, it
+  reports 350 000 rows instead of 1 000 000.
+
+  Open points: kept states are in memory only (no persistence across
+  sessions); `restart!` stops the whole run for an edit (a finer, in-place
+  graph edit would avoid stopping unaffected branches); a Variable's current
+  value could join its signature to make its downstream resumable;
+  `VersionRecorder` records `set_variable!` only (graph edits come from the
+  editor as versions already).

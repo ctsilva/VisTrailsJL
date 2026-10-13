@@ -24,10 +24,9 @@ as they are added; the design and the remaining phases are in
 | Writing progressive modules: folds, maps, or the step contract | Phase 3b | [Writing progressive modules](#writing-progressive-modules) |
 | Parallel progressive execution: modules, producer/consumer overlap, data-parallel folds | Phase 4 | [Parallel progressive execution](#parallel-progressive-execution) |
 | Live inputs (`Variable`, `set_variable!`), parameters driven by inputs, interactive priority | Phase 5a | [Live inputs and interaction](#live-inputs-and-interaction) |
-
-Planned (Phase 5b): progressive state kept across edits (by signature),
-progress of partial results in provenance, live edits recorded in the
-version tree.
+| Progressive state kept across runs and edits (`ProgressiveStateCache`, `restart!`) | Phase 5b | [Edits during a run](#edits-during-a-run) |
+| Progress of partial results in provenance; execution history for ProgressiVis' viewer | Phase 5b | [Provenance of progressive runs](#provenance-of-progressive-runs) |
+| Live input changes recorded as versions (`VersionRecorder`) | Phase 5b | [Provenance of progressive runs](#provenance-of-progressive-runs) |
 
 ## Quick start
 
@@ -419,6 +418,76 @@ Measured (8 threads, Apple M5) while a 1-billion-row branch with `Var` and a
 `Count` branch over 300 000 rows has caught up in 1.5-2.5 ms (8 workers;
 2-6 ms with 1 worker), over 3 million rows in 10-95 ms.
 
+### Edits during a run
+
+Give the engine a `ProgressiveStateCache` and every module's progressive
+state (accumulators, output tables, positions in its inputs) is kept when a
+run ends, keyed by the module's [signature](#signatures). A later run with
+the same engine resumes each module whose signature is unchanged and whose
+producers were all resumed; the others start over and read their inputs from
+the beginning. This is VisTrails' caching applied to progressive state.
+
+```julia
+engine = ProgressiveEngine(state_cache=ProgressiveStateCache())
+pr = start!(engine, version_a)
+# ... while it runs, edit the pipeline (e.g. in the editor: a new version)
+pr = restart!(pr, version_b)    # stop, then start version_b with the kept states
+```
+
+- Unchanged modules **continue**: a source keeps producing from where it
+  stopped (into the same table), statistics keep their accumulators.
+- Edited modules and everything downstream of them **start over**, reading
+  all rows already produced.
+- Switching back to an earlier version resumes its modules too, including
+  modules that run stopped half-way.
+- `restart!` keeps the observers; it is `stop!`, `wait` and `start!` with
+  the same engine. `run!` and `start!` use the cache the same way.
+- Step and item counts (`module_steps`) of a resumed module are cumulative.
+- Kept states hold their tables: `ProgressiveStateCache(max_entries=256)`
+  drops the least recently kept beyond that, and `empty!(cache)` drops all.
+- Not kept: failed and cancelled modules, non-cacheable modules and their
+  downstream, and `Variable`s (their current value is not in their
+  signature), so modules downstream of a `Variable` start over.
+
+### Provenance of progressive runs
+
+**Partial results.** `module_progress(run, id)` returns `(done, total)` for
+a progressive module: rows produced by a `RandomTable` (of `rows`), bytes
+read by a `CSVLoader`, rows consumed by a fold or map (of the rows available
+so far); module types can extend `progress(state)`. The execution log
+records it: each `ModuleExec` of a progressive run has the annotations
+`steps`, `items`, `status` and `progress`. Modules that had not finished
+when a run was stopped are logged too, with `partial = "true"` and
+`completed = 0`, so the log says how far each partial result got. Resumed
+modules have `resumed = "true"`; those already finished are logged as
+cached.
+
+**Execution history.** `ExecutionHistory()` is an observer recording every
+step (start, end, work, state) of every module. Export it in the JSON format
+of ProgressiVis' execution history (schema version 1) and open it in its
+offline viewer (`progressivis-parallel/tools/execution-viewer/index.html`)
+to replay the run, with the steps' overlap:
+
+```julia
+history = ExecutionHistory()
+run!(ProgressiveEngine(), pipeline; observers=[history])
+export_execution_history(history, "capture.json")
+```
+
+**Live input changes as versions.** `VersionRecorder(vistrail, version)`
+records each `set_variable!` of a run of `vistrail.pipelines[version]` as a
+new version: a child of the previous one, whose pipeline has the new value
+as the `Variable`'s `value` parameter, and whose action lists the change. An
+exploration session becomes a branch of the version tree; running its last
+version reproduces where the session ended.
+
+```julia
+recorder = VersionRecorder(vt, v)
+pr = start!(ProgressiveEngine(), vt.pipelines[v]; observers=[recorder])
+set_variable!(pr, threshold, 0.1); set_variable!(pr, threshold, 0.3)
+recorder.versions    # two new versions, children of v
+```
+
 ### Progressive modules
 
 Package `org.vistrails.progressive` (short name `progressive` in workflow
@@ -689,6 +758,13 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 
 ## Changelog
 
+- **Phase 5b (2026-10-13)**: `ProgressiveStateCache` (progressive state
+  kept by signature across runs, edits and versions; LRU), `restart!`;
+  `progress`/`module_progress` and progress annotations, partial results of
+  stopped runs logged; `ExecutionHistory` and `export_execution_history`
+  (ProgressiVis viewer format, validated with its parser);
+  `VersionRecorder`; `add_version!` takes `operations` and no longer reuses
+  ids of non-contiguous version trees.
 - **Phase 5a (2026-10-13)**: `Variable` input module, `set_variable!`,
   `close_inputs!`, `is_input_module`; parameters driven by connected inputs
   (`param`), with an optional input port per fold/map parameter; restart of

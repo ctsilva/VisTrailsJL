@@ -25,6 +25,8 @@ function init_state(::Type{RandomTableModule}, ctx::StepContext)
                             as_int(param(ctx, "rows", 1_000_000)))
 end
 
+progress(s::RandomTableState) = (last_id(s.table), last_id(s.table) + s.remaining)
+
 function step!(s::RandomTableState, ctx::StepContext, budget::Int)
     n = min(budget, s.remaining)
     # One value at a time, row by row, so the rows do not depend on step
@@ -45,6 +47,8 @@ execution_style(::Type{CSVLoaderModule}) = Progressive()
 default_step_size(::Type{CSVLoaderModule}) = 50_000
 
 mutable struct CSVLoaderState
+    bytes_read::Int
+    bytes_total::Int
     io::IO
     names::Vector{Symbol}         # all columns of the file
     types::Dict{Symbol, Type}     # of the selected columns
@@ -80,7 +84,7 @@ function init_state(::Type{CSVLoaderModule}, ctx::StepContext)
     end
 
     table = set_output!(ctx, "result", ProgressiveTable((n => types[n] for n in selected)...))
-    return CSVLoaderState(io, names, types, selected, table)
+    return CSVLoaderState(position(io), filesize(path), io, names, types, selected, table)
 end
 
 function step!(s::CSVLoaderState, ctx::StepContext, budget::Int)
@@ -97,10 +101,12 @@ function step!(s::CSVLoaderState, ctx::StepContext, budget::Int)
                         types=Dict(k => nonmissingtype(v) for (k, v) in s.types))
         append!(s.table, rows)
     end
+    s.bytes_read = position(s.io)
     return StepResult(eof(s.io) ? :done : :ready, n)
 end
 
 finish!(s::CSVLoaderState, ctx::StepContext) = close(s.io)
+progress(s::CSVLoaderState) = (s.bytes_read, s.bytes_total)   # bytes
 
 # Variable: an input module whose value changes during a run (set_variable!)
 
@@ -118,6 +124,10 @@ function init_state(::Type{VariableModule}, ctx::StepContext)
 end
 
 step!(::VariableState, ctx::StepContext, budget::Int) = StepResult(:blocked, 0)
+
+# Its current value is not in its signature (only the initial one is), so its
+# state must not be reused by later runs; downstream modules start over
+is_cacheable(::Type{VariableModule}) = false
 
 # Sink: consumes everything connected to `table`; outputs the number of rows
 

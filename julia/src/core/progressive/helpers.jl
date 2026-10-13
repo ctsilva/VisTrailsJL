@@ -362,3 +362,14 @@ function record_outputs!(out_id::Vector{Int}, id_list::Vector{Int}, new_rows::Ab
         out_id[id_list[i]] = out
     end
 end
+
+# Progress: rows consumed of the rows available so far
+function input_progress(table::ProgressiveTable, sub::TableSubscription)
+    lock(table.lock) do
+        available = last_id(table) - length(table.deleted)
+        (available - length(sub.created), available)
+    end
+end
+
+progress(s::FoldState) = input_progress(s.table, s.sub)
+progress(s::MapState) = input_progress(s.table, s.sub)

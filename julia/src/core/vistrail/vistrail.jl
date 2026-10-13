@@ -67,9 +67,9 @@ end
 Add a new version to the vistrail.
 """
 function add_version!(vt::Vistrail, pipeline::Pipeline, parent_id::Int=0;
-                     notes::String="", user::String="user")
-    # Generate new version ID
-    new_id = length(vt.actions) + 1
+                     notes::String="", user::String="user", operations::Vector=Any[])
+    # Generate new version ID (versions loaded from files need not be contiguous)
+    new_id = maximum(keys(vt.actions); init=0) + 1
 
     # Create action
     action = Action(
@@ -78,7 +78,7 @@ function add_version!(vt::Vistrail, pipeline::Pipeline, parent_id::Int=0;
         now(),
         user,
         notes,
-        []  # Operations would be computed by diffing pipelines
+        operations
     )
 
     # Store
