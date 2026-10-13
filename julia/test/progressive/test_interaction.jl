@@ -63,6 +63,23 @@ VT.on_interaction_done(o::Log, run, seconds) = push!(o.events, (:caught_up, seco
         @test any(port.name == "value" && port.optional for port in get_module_descriptor(P, "Filter").input_ports)
     end
 
+    @testset "A driven parameter waits for its first value" begin
+        # Histogram1D's bounds come from an input that has no value at first
+        p = Pipeline()
+        src = node!(p, "RandomTable"; rows=20_000, seed=3)
+        lo = node!(p, "Variable")                       # no initial value
+        h = node!(p, "Histogram1D", src; column="x", bins=10, max=1.0)
+        add_connection!(p, lo, "result", h, "min")
+        pr = start!(ProgressiveEngine(step_size=id -> 1_000), p)
+        sleep(0.2)
+        @test !has_value(pr.run.outputs[h.id]["result"])   # waited, did not fail
+        set_variable!(pr, lo, 0.0)
+        close_inputs!(pr)
+        run = wait(pr)
+        @test module_status(run, h.id) == :done
+        @test sum(result_of(run, h)) == 20_000
+    end
+
     @testset "Changing a value during a run" begin
         for workers in (1, 4)
             p, m = live_filter(2_000_000; threshold=0.5)

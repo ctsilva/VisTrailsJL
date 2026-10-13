@@ -55,6 +55,15 @@ function step! end
 finish!(state, ctx) = nothing
 
 """
+    ready_to_step(state, ctx) -> Bool
+
+Whether a progressive module can step now (default: yes). A module that is
+not ready (e.g. a fold whose parameter comes from an input with no value
+yet) is not stepped; once its producers are done it completes.
+"""
+ready_to_step(state, ctx) = true
+
+"""
     is_input_module(module_type::Type) -> Bool
 
 Input modules (e.g. `Variable`) receive values from outside during a run
@@ -512,6 +521,9 @@ function next_action(state::ProgressiveState, progress::ModuleProgress, sweep=no
         # Done once computed, or if its producers finished without providing inputs
         producers_done && !changes && (progress.state === true || !available) && return :complete
         return :none
+    end
+    if !ready_to_step(progress.state, ctx)
+        return producers_done ? :complete : :none
     end
     # Control inputs (values, dicts: parameters, view, revisions) always
     # step; data (table rows) and work left over only while someone needs it

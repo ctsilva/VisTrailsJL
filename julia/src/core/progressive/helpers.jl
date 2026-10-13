@@ -80,9 +80,12 @@ Register a progressive module that folds the rows of the table connected to
 
 With `merge(acc1, acc2)` → accumulator (combining the folds of two
 consecutive pieces of rows, where `init` is the identity), the rows of a
-step are folded in blocks of `FOLD_BLOCK_ROWS`, on several threads when
-Julia has them, and merged in block order. Blocks do not depend on the
-number of threads, so neither do the results.
+step are split into blocks of `FOLD_BLOCK_ROWS`, the blocks into at most
+`FOLD_GROUPS` groups of consecutive blocks; each group is folded into its
+own accumulator (on several threads when Julia has them), and the groups
+are merged in order. Neither depends on the number of threads, so neither
+do the results; a step creates at most `FOLD_GROUPS` accumulators, however
+many rows it has (accumulators can be large: a 512² histogram is 2 MB).
 """
 function define_fold_module!(package::String, name::String;
                              init::Function, update::Function, result::Function,
@@ -184,6 +187,13 @@ function column_chunks(table::ProgressiveTable, columns::Vector{Symbol}, ids::Ro
     return chunks
 end
 
+# Connected parameter inputs that have no value yet (e.g. bounds still being computed)
+controls_waiting(ctx::StepContext, main_input::String) =
+    any(c isa ProgressiveValue && !has_value(c) for (port, cs) in ctx.inputs if port != main_input for c in cs)
+
+# A parameter driven by an input waits for its first value
+ready_to_step(s::FoldState, ctx::StepContext) = !controls_waiting(ctx, s.spec.input)
+
 function step!(s::FoldState, ctx::StepContext, budget::Int)
     counts = pending(s.sub)
     controls_changed = take_control_changes!(ctx, s.spec.input)
@@ -213,6 +223,11 @@ Rows per block for folds with a `merge` (data parallelism).
 """
 const FOLD_BLOCK_ROWS = 16_384
 
+"""
+Most groups of blocks (accumulators) per step of a fold with a `merge`.
+"""
+const FOLD_GROUPS = 16
+
 # Split chunks (one per storage segment) into blocks of at most FOLD_BLOCK_ROWS rows
 function fold_block_list(chunks)
     blocks = NamedTuple[]
@@ -228,11 +243,14 @@ end
 
 function fold_blocks(s::FoldState, ctx::StepContext, chunks)
     blocks = fold_block_list(chunks)
-    fold_one(block) = s.spec.update(s.spec.init(ctx, s.columns), block, ctx)
-    partials = if Threads.nthreads() > 1 && length(blocks) > 1 && !background_during_interaction(ctx)
-        fetch.([Threads.@spawn fold_one(b) for b in blocks])
+    n = length(blocks)
+    g = min(n, FOLD_GROUPS)
+    groups = [blocks[cld((k - 1) * n, g) + 1:cld(k * n, g)] for k in 1:g]
+    fold_group(group) = foldl((acc, block) -> s.spec.update(acc, block, ctx), group; init=s.spec.init(ctx, s.columns))
+    partials = if Threads.nthreads() > 1 && length(groups) > 1 && !background_during_interaction(ctx)
+        fetch.([Threads.@spawn fold_group(g) for g in groups])
     else
-        map(fold_one, blocks)
+        map(fold_group, groups)
     end
     acc = s.acc
     for p in partials

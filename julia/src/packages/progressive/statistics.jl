@@ -36,6 +36,28 @@ function histogram_bin(x, lo, hi, bins)
     return x == hi ? bins : floor(Int, (x - lo) / (hi - lo) * bins) + 1
 end
 
+# Counting loops behind a function barrier: the bounds come from parameters
+# (untyped), and the loops must be compiled for concrete types
+function count_bins!(counts::Vector{Int}, xs::AbstractVector, lo::Float64, hi::Float64)
+    bins = length(counts)
+    @inbounds for x in xs
+        b = histogram_bin(x, lo, hi, bins)
+        b > 0 && (counts[b] += 1)
+    end
+    return counts
+end
+
+function count_bins!(counts::Matrix{Int}, xs::AbstractVector, ys::AbstractVector,
+                     xlo::Float64, xhi::Float64, ylo::Float64, yhi::Float64)
+    nx, ny = size(counts)
+    @inbounds for i in eachindex(xs, ys)
+        bx = histogram_bin(xs[i], xlo, xhi, nx)
+        by = histogram_bin(ys[i], ylo, yhi, ny)
+        (bx > 0 && by > 0) && (counts[bx, by] += 1)
+    end
+    return counts
+end
+
 function register_progressive_statistics!()
     P = PROGRESSIVE_PACKAGE
 
@@ -81,15 +103,8 @@ function register_progressive_statistics!()
     define_fold_module!(P, "Histogram1D";
         columns=(ctx, t) -> [Symbol(required_param(ctx, "column"))],
         init=(ctx, cols) -> zeros(Int, as_int(param(ctx, "bins", 64))),
-        update=function (counts, chunk, ctx)
-            lo, hi = as_float(required_param(ctx, "min")), as_float(required_param(ctx, "max"))
-            bins = length(counts)
-            for x in first(chunk)
-                b = histogram_bin(x, lo, hi, bins)
-                b > 0 && (counts[b] += 1)
-            end
-            counts
-        end,
+        update=(counts, chunk, ctx) ->
+            count_bins!(counts, first(chunk), as_float(required_param(ctx, "min")), as_float(required_param(ctx, "max"))),
         merge=(a, b) -> (a .+= b),
         result=(counts, ctx) -> copy(counts),
         output=:value, output_type=Vector{Int},
@@ -98,17 +113,10 @@ function register_progressive_statistics!()
     define_fold_module!(P, "Histogram2D";
         columns=(ctx, t) -> Symbol.([required_param(ctx, "x_column"), required_param(ctx, "y_column")]),
         init=(ctx, cols) -> zeros(Int, as_int(param(ctx, "xbins", 64)), as_int(param(ctx, "ybins", 64))),
-        update=function (counts, chunk, ctx)
-            xlo, xhi = as_float(required_param(ctx, "xmin")), as_float(required_param(ctx, "xmax"))
-            ylo, yhi = as_float(required_param(ctx, "ymin")), as_float(required_param(ctx, "ymax"))
-            xs, ys = chunk[1], chunk[2]
-            for i in eachindex(xs, ys)
-                bx = histogram_bin(xs[i], xlo, xhi, size(counts, 1))
-                by = histogram_bin(ys[i], ylo, yhi, size(counts, 2))
-                (bx > 0 && by > 0) && (counts[bx, by] += 1)
-            end
-            counts
-        end,
+        update=(counts, chunk, ctx) ->
+            count_bins!(counts, chunk[1], chunk[2],
+                        as_float(required_param(ctx, "xmin")), as_float(required_param(ctx, "xmax")),
+                        as_float(required_param(ctx, "ymin")), as_float(required_param(ctx, "ymax"))),
         merge=(a, b) -> (a .+= b),
         result=(counts, ctx) -> copy(counts),
         output=:value, output_type=Matrix{Int},

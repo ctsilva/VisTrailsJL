@@ -333,8 +333,12 @@ With `workers > 1` (default: `Threads.nthreads()`; start Julia with
   writing them and their storage never moves (ProgressiVis has to keep
   connected modules apart instead).
 - **Data parallelism**: folds that define `merge` split each step's rows
-  into blocks of 16 384 rows, fold them on several threads and merge the
-  partial results in block order (all the statistics modules do).
+  into blocks of 16 384 rows and the blocks into at most 16 groups of
+  consecutive blocks; each group is folded into its own accumulator, on
+  several threads, and the groups are merged in order (all the statistics
+  modules do). The split does not depend on the number of threads, so
+  neither do the results; a step makes at most 16 accumulators (a 512²
+  histogram's is 2 MB).
 
 Rules: at most `workers` steps run at once; two steps of the same module
 never do; when more modules need a step than workers are free, the module
@@ -825,6 +829,13 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 
 ## Changelog
 
+- **Performance (2026-10-13)**: folds with `merge` fold groups of
+  blocks (at most 16 accumulators per step) instead of one accumulator per
+  16 384-row block; histogram loops behind a function barrier (their
+  bounds are untyped parameters). The taxi dashboard (14.8 M rows, two 512²
+  histograms) went from 5.4 s to 0.15 s on one thread. `ready_to_step(state,
+  ctx)` hook: a fold whose parameter comes from an input without a value
+  yet is not stepped (it completes if that never changes).
 - **Convergence (2026-10-13)**: `converged(state)` hook; sources and
   modules with work left over step only while a module downstream wants
   data, and resume when one does again; `run!` completes paused modules
