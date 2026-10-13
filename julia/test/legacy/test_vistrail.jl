@@ -1,18 +1,13 @@
 using VisTrailsJL
 
-if length(ARGS) < 1
-    println("Usage: julia test_vistrail.jl <path_to_vt_file>")
-    exit(1)
-end
-
-vt_file = ARGS[1]
+vt_file = isempty(ARGS) ? joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt") : ARGS[1]
 base_name = splitext(basename(vt_file))[1]
 
 println("="^70)
 println("Loading $vt_file...")
 println("="^70)
 
-vt = load_vistrail(vt_file)
+vt = load_vistrail_internal(vt_file)
 
 println("\nVistrail Info:")
 println("  Name: $(vt.name)")

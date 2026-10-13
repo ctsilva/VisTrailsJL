@@ -3,13 +3,13 @@ Test tag loading and display
 """
 
 using Pkg
-Pkg.activate(@__DIR__)
+Pkg.activate(joinpath(@__DIR__, "..", ".."))
 
 using VisTrailsJL
 
-vt_file = joinpath(@__DIR__, "..", "examples", "terminator.vt")
+vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "terminator.vt")
 println("Loading $vt_file...")
-vt = load_vistrail(vt_file)
+vt = load_vistrail_internal(vt_file)
 
 println("\nVistrail Info:")
 println("  Total versions: ", length(vt.actions))

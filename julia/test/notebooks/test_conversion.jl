@@ -156,7 +156,7 @@ println("=" ^ 60)
 
             # Convert version 134 (latest in gcd.vt based on docs)
             # Actually let's find the latest version
-            vistrail = load_vistrail(vt_path)
+            vistrail = load_vistrail_internal(vt_path)
 
             # Get the highest version number
             max_version = maximum(keys(vistrail.actions))

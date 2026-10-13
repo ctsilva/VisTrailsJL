@@ -15,7 +15,7 @@ vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 println("\nLoading $vt_file...")
 
 # Load the vistrail (uses workflow element fallback for version 134)
-vt = load_vistrail(vt_file)
+vt = load_vistrail_internal(vt_file)
 
 pipeline = get_pipeline(vt, vt.current_version)
 

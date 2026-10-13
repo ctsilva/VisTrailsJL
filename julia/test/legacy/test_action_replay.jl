@@ -1,13 +1,10 @@
-using Pkg
-Pkg.activate(".")
-
-using VisTrailsJL
+include(joinpath(@__DIR__, "..", "..", "src", "VisTrailsJL.jl"))
+using .VisTrailsJL: load_vt_xml, replay_actions_to_version
 
 println("Testing action replay...")
 
 # Load XML
-include("src/db/services/io.jl")
-root = load_vt_xml("../examples/gcd.vt")
+root = load_vt_xml(joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt"))
 
 # Try action replay
 try

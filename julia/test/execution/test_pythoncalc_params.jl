@@ -9,7 +9,7 @@ using .VisTrailsJL
 vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 
 println("Loading version 100...")
-vt = load_vistrail(vt_file, version=100)
+vt = load_vistrail_internal(vt_file, version=100)
 
 pipeline = get_pipeline(vt, 100)
 

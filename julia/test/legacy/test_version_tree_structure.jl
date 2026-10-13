@@ -3,7 +3,7 @@ Analyze version tree structure in gcd.vt
 """
 
 using Pkg
-Pkg.activate(@__DIR__)
+Pkg.activate(joinpath(@__DIR__, "..", ".."))
 
 using VisTrailsJL
 
@@ -11,11 +11,11 @@ println("=" ^ 60)
 println("Analyzing Version Tree Structure")
 println("=" ^ 60)
 
-vt_file = joinpath(@__DIR__, "..", "examples", "gcd.vt")
+vt_file = joinpath(@__DIR__, "..", "..", "..", "examples", "gcd.vt")
 
 println("\nLoading $vt_file...")
 
-vt = load_vistrail(vt_file)
+vt = load_vistrail_internal(vt_file)
 
 println("\nVistrail info:")
 println("  Total versions (actions): ", length(vt.actions))
