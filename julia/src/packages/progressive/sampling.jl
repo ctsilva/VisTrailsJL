@@ -79,7 +79,7 @@ function step!(s::SampleState, ctx::StepContext, budget::Int)
     fill = min(n, s.k - length(s.ids))
     if fill > 0
         ids = RowIds(created[1:fill])
-        rows = append!(s.out, NamedTuple{Tuple(names)}(Tuple(s.table[ids, c] for c in names)))
+        rows::UnitRange{Int} = append!(s.out, NamedTuple{Tuple(names)}(Tuple(s.table[ids, c] for c in names)))
         append!(s.ids, created[1:fill]); append!(s.rows, rows)
         s.seen += fill
         changed = true

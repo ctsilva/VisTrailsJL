@@ -246,7 +246,7 @@ Base.isempty(t::ProgressiveTable) = length(t) == 0
 Append the rows of a Tables.jl table (e.g. a `NamedTuple` of vectors) that
 has (at least) the table's columns. Returns the new row ids.
 """
-function Base.append!(t::ProgressiveTable, data)
+function Base.append!(t::ProgressiveTable, data)::UnitRange{Int}
     is_view(t) && throw(ArgumentError("append! to a selection view: append to its base table"))
     cols = Tables.columns(data)
     values = [Tables.getcolumn(cols, name) for name in t.names]

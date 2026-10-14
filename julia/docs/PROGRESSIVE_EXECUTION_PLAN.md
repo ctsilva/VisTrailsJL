@@ -515,3 +515,20 @@ Import its module catalog as descriptors, or drive it as an external engine.
   ported; `Intersection` recomputes from its inputs at each change (O(rows));
   scattered selections cost 16 bytes per row (roaring-style containers
   would cut that); TaxiVis does not use the index yet (its zoom rescans).
+
+- 2026-10-14: ProgressiVis modules, tier 3: element-wise and relational.
+  `Unary`, `ColsBinary`, `Reduce` (associative functions only, so results
+  do not depend on step sizes), `LinearMap` (maps gain `extra_inputs` and
+  `ready`: rows wait for the whole matrix); `GroupBy` (view with the groups
+  in `meta`), `Aggregate` (one row per group, updated in place); `Join`
+  (many-to-one, inner rows wait for their key, outer rows are filled in
+  when it arrives), `JoinById` (inner, by row id: ProgressiVis' `Merge`),
+  `Switch`. Fixed in the fold helper: a fold restarted with no rows left (a
+  view emptied by `Switch` or a query) returned without publishing, so its
+  old result stayed. Performance on the 14.8 M January trips: `Aggregate`
+  1.94 → 0.29 s and `Join` 12 → 0.57 s, by mapping each step's keys
+  through a typed table of its distinct keys, gathering whole columns, a
+  dense row-id map, and annotating `append!`'s result (not inferred: every
+  loop over the new ids was dynamic). Not ported: `CombineFirst`, `Paste`,
+  `UniqueIndex` (inside `Join`), datetime-part grouping (a map can derive
+  the key).

@@ -43,6 +43,7 @@ struct MapSpec
     input::String
     schema::Function     # (ctx, table) -> Vector{Pair{Symbol, Type}}
     map::Function        # (chunk::NamedTuple, ctx) -> NamedTuple of output columns (+ optional :_keep)
+    ready::Function      # ctx -> Bool: whether rows can be mapped now
 end
 
 const FOLD_SPECS = Dict{Tuple{String, String}, FoldSpec}()
@@ -110,7 +111,8 @@ function define_fold_module!(package::String, name::String;
 end
 
 """
-    define_map_module!(package, name; map, schema=same_schema, input="table", parameters=[])
+    define_map_module!(package, name; map, schema=same_schema, input="table", parameters=[],
+                       extra_inputs=[], ready=ctx -> true)
 
 Register a progressive module that maps the rows of the table connected to
 `input` into the output table `result`:
@@ -120,13 +122,20 @@ Register a progressive module that maps the rows of the table connected to
 - `map(chunk, ctx)` → a `NamedTuple` of output column vectors, one row per
   input row of `chunk` (a `NamedTuple` of input column vectors). An extra
   `_keep` Boolean column drops the rows where it is false (a filter).
+
+`extra_inputs` (names) are more table inputs read by `map` through `ctx`
+(e.g. a matrix); a change there remaps every row, as a parameter change
+does. Rows wait while `ready(ctx)` is false (e.g. until such an input is
+complete).
 """
 function define_map_module!(package::String, name::String;
                             map::Function, schema::Function=same_schema,
-                            input::String="table", parameters::Vector=Tuple{String, Type}[])
-    MAP_SPECS[(package, name)] = MapSpec(input, schema, map)
+                            input::String="table", parameters::Vector=Tuple{String, Type}[],
+                            extra_inputs::Vector{String}=String[], ready::Function=ctx -> true)
+    MAP_SPECS[(package, name)] = MapSpec(input, schema, map, ready)
     register_module!(ModuleDescriptor(package, name, MapModule{Symbol(package), Symbol(name)},
-        [InputPort(input, ProgressiveTable); control_ports(parameters)], [OutputPort("result", ProgressiveTable)],
+        [InputPort(input, ProgressiveTable); [InputPort(n, ProgressiveTable) for n in extra_inputs];
+         control_ports(parameters)], [OutputPort("result", ProgressiveTable)],
         Tuple{String, Type}[(p[1], p[2]) for p in parameters]))
 end
 
@@ -227,7 +236,8 @@ ready_to_step(s::FoldState, ctx::StepContext) = !controls_waiting(ctx, s.spec.in
 function step!(s::FoldState, ctx::StepContext, budget::Int)
     counts = pending(s.sub)
     controls_changed = take_control_changes!(ctx, s.spec.input)
-    if counts.updated > 0 || counts.deleted > 0 || controls_changed
+    restarted = counts.updated > 0 || counts.deleted > 0 || controls_changed
+    if restarted
         # Cannot update a fold incrementally: start over from all rows
         reset!(s.sub)
         controls_changed && (s.columns = s.spec.columns(ctx, s.table))
@@ -235,7 +245,11 @@ function step!(s::FoldState, ctx::StepContext, budget::Int)
     end
 
     ids = next_created!(s.sub, budget)
-    isempty(ids) && return StepResult(:blocked, 0)
+    if isempty(ids)
+        # Restarted with no rows left (e.g. a view emptied): publish the empty result
+        restarted && publish_fold!(s, ctx)
+        return StepResult(:blocked, restarted ? 1 : 0)
+    end
     chunks = column_chunks(s.table, s.columns, ids; row_ids=s.spec.row_ids)
     if s.spec.merge === nothing
         for chunk in chunks
@@ -331,6 +345,8 @@ function init_state(T::Type{<:MapModule}, ctx::StepContext)
 end
 
 output_row(s::MapState, id::Int) = id <= length(s.out_id) ? s.out_id[id] : 0
+
+ready_to_step(s::MapState, ctx::StepContext) = s.spec.ready(ctx)
 
 function step!(s::MapState, ctx::StepContext, budget::Int)
     if take_control_changes!(ctx, s.spec.input)

@@ -10,6 +10,8 @@ Modules for the progressive engine (docs/EXECUTION.md):
 - `Sample`: a random sample of rows, kept up to date (reservoir)
 - indexes and queries: `BinningIndex`; `RangeQuery`, `RangeQuery2D`, `SimpleFilter`,
   `CategoricalQuery`, `Intersection` (selection views); `Percentiles`
+- element-wise: `Unary`, `ColsBinary`, `Reduce`, `LinearMap`
+- grouping and joins: `GroupBy`, `Aggregate`, `Join`, `JoinById`, `Switch`
 - `Sink`: consumes its input
 
 They also run in the one-shot engines, as a single unbounded pass.
@@ -20,6 +22,9 @@ include("statistics.jl")
 include("relational.jl")
 include("sampling.jl")
 include("indexes.jl")
+include("elementwise.jl")
+include("grouping.jl")
+include("joins.jl")
 
 const PROGRESSIVE_PACKAGE = "org.vistrails.progressive"
 
@@ -30,6 +35,9 @@ function initialize_progressive_package!()
     register_progressive_relational!()
     register_progressive_sampling!()
     register_progressive_indexes!()
+    register_progressive_elementwise!()
+    register_progressive_grouping!()
+    register_progressive_joins!()
     register_package_short_name!("progressive", PROGRESSIVE_PACKAGE)
     println("  ✓ Progressive package initialized")
 end

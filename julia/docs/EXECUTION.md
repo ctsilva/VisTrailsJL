@@ -31,6 +31,7 @@ as they are added; the design and the remaining phases are in
 | ProgressiVis modules, tier 1: `ParquetLoader`, `Quantiles`, `KLLSketch`, `Histogram1DCategorical`, `Distinct`, `Corr`, `IdxMin`, `IdxMax`, `Sample` | ProgressiVis modules | [Progressive modules](#progressive-modules) |
 | Selection views of tables (`selection_view`, `select!`, `deselect!`, `set_selection!`, `touch!`); linear-time `RowIds` set operations | ProgressiVis modules | [Selection views](#selection-views) |
 | ProgressiVis modules, tier 2: `BinningIndex`, `RangeQuery`, `RangeQuery2D`, `SimpleFilter`, `CategoricalQuery`, `Intersection`, `Percentiles` | ProgressiVis modules | [Progressive modules](#progressive-modules) |
+| ProgressiVis modules, tier 3: `Unary`, `ColsBinary`, `Reduce`, `LinearMap`, `GroupBy`, `Aggregate`, `Join`, `JoinById`, `Switch`; maps with extra table inputs and readiness | ProgressiVis modules | [Progressive modules](#progressive-modules) |
 | Convergence: sources load only while a result downstream needs more data (`converged`), and resume when one does again | TaxiVis | [Convergence](#convergence) |
 
 ## Quick start
@@ -588,6 +589,15 @@ notebooks). Tables flow through ports named `table` (input) and `result`
 | `CategoricalQuery` | `column`, `choice` (values to keep) | selection view (scans; no index) |
 | `Intersection` | several selection views of one table on `table` | selection view of the rows in all of them |
 | `Percentiles` | input `index`; `column`, `percentiles` (0-100; `[25, 50, 75]`) | `ProgressiveDict` percentile → value; exact (numpy's "lower") |
+| `Unary` | `function` (`abs`, `sqrt`, `log`, `exp`, `sin`, `floor`, `isnan`, ...: `ELEMENTWISE_UNARY`), `columns` (default: numeric) | table of those columns, transformed; types follow the function |
+| `ColsBinary` | `function` (`+`, `-`, `*`, `/`, `^`, `min`, `max`, `hypot`, `atan2`, comparisons, ...: `ELEMENTWISE_BINARY`), `first`, `second` (column lists, pairwise), `cols_out` (default `first`) | table of the results |
+| `Reduce` | `function` (associative: `+`, `*`, `min`, `max`, `&`, `\|`, `xor`), `columns` | `ProgressiveDict` column → reduction |
+| `LinearMap` | inputs `vectors` (rows: k columns, `columns`) and `transformation` (k rows × m columns, `transformation_columns`) | table of m columns (the transformation's names): each row times the matrix; rows wait until the matrix has k rows, and a change in it remaps all |
+| `GroupBy` | `by` (columns) | selection view of all rows, carrying the groups (`meta[:groups].rows`: key → row ids; key: the value, or a tuple) |
+| `Aggregate` | `compute` (`"column:function"`, functions `count`, `sum`, `mean`, `var`, `std`, `min`, `max`; `":count"`), `by` (or from a `GroupBy` input) | table: one row per group (`by` columns, then `column_function`), appended in order of appearance and updated in place; input updates and deletions recompute all groups |
+| `Join` | inputs `primary` (unique key) and `related`; `on` (or `primary_on` and `related_on`), `how` (`"inner"`, `"outer"`), `primary_columns`, `related_columns`, `suffix` (`"_primary"`) | table: each related row with its primary row's columns; inner: rows wait for their key; outer: `missing` until the key arrives, then filled in (updates) |
+| `JoinById` | several tables on `table` (views of one table) | table of the rows in every input, all columns (clashes: `name_k`) |
+| `Switch` | `condition` (`Bool`; unset: wait) | `result` (rows while true), `result_else` (while false): selection views; a change moves the rows |
 | `Filter` | `column`, `op` (`<`, `<=`, `>`, `>=`, `==`, `!=`), `value` | table of the matching rows |
 | `Select` | `columns` | table with those columns |
 | `Sink` | — (consumes any input) | port `count`: rows consumed |
@@ -613,6 +623,18 @@ and queries scan; `Intersection` needs the progressive engine (row ids).
 On the 14.8 M January trips (10 threads, compiled): load, index two
 columns and query a box of 7.9 M trips in 0.56 s; re-query a zoomed box
 (585 K trips, histogram and count downstream) in 0.24 s.
+
+Tier 3 differs from ProgressiVis in: one module per kind of element-wise
+operation, taking the function by name (`register_elementwise!` adds
+functions), instead of a class per NumPy function; `Join` and `JoinById`
+copy values into a new table (ProgressiVis: views with computed columns),
+and handle inputs arriving in any order (ProgressiVis' `JoinById`, `Merge`
+and `CombineFirst` recompute from scratch at each step); `Switch` can
+change its mind; grouping by parts of datetime columns is left to a map
+deriving a key column. Not ported: `CombineFirst`, `Paste`, `UniqueIndex`
+(inside `Join`). Loading the January trips (0.11 s) and aggregating by
+passenger count (mean distance, count): 0.29 s; joining every trip with a
+10-row lookup table: 0.57 s.
 
 In a workflow notebook:
 
@@ -664,7 +686,9 @@ define_map_module!("my.package", "Radius";
   (the row ids it covers). A dict result reports only changed keys, so
   return new objects rather than mutated ones. Parameters: `param(ctx, "name", default)`.
 - A map's output rows follow their input rows: updated inputs are
-  re-mapped, deleted inputs delete their outputs.
+  re-mapped, deleted inputs delete their outputs. `extra_inputs` adds table
+  inputs that `map` reads through `ctx` (a change there remaps all rows);
+  rows wait while `ready(ctx)` is false.
 
 For anything else, implement the step contract on your own module type:
 
@@ -896,6 +920,11 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 
 ## Changelog
 
+- **ProgressiVis modules, tier 3 (2026-10-14)**: `Unary`, `ColsBinary`,
+  `Reduce`, `LinearMap`, `GroupBy`, `Aggregate`, `Join`, `JoinById`,
+  `Switch`; `define_map_module!` takes `extra_inputs` and `ready`. Fixed: a
+  fold restarted with no rows left (a view emptied) kept its old result.
+  Tests: `test_relational_modules.jl`.
 - **ProgressiVis modules, tier 2 (2026-10-13)**: selection views of tables
   (`selection_view`, `select!`, `deselect!`, `set_selection!`, `touch!`,
   `meta`); linear-time `RowIds` `union`/`setdiff`/`intersect`; scattered ids
