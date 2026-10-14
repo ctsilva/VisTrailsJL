@@ -154,7 +154,12 @@ mutable struct ProgressiveTable
     deleted::RowIds
     subscriptions::Vector{TableSubscription}
     lock::ReentrantLock
+    base::Union{Nothing, ProgressiveTable}   # a selection view of this table
+    meta::Dict{Symbol, Any}                  # what its producer attaches (e.g. an index)
 end
+
+ProgressiveTable(names, columns, last_id, deleted, subscriptions, lock) =
+    ProgressiveTable(names, columns, last_id, deleted, subscriptions, lock, nothing, Dict{Symbol, Any}())
 
 function ProgressiveTable(schema::Pair{Symbol, <:Type}...; segment_size::Int=DEFAULT_SEGMENT_SIZE)
     segment_size >= 1 || throw(ArgumentError("segment_size must be positive"))
@@ -198,6 +203,7 @@ Values of a column at the given row ids, in increasing id order.
 """
 function Base.getindex(t::ProgressiveTable, ids::RowIds, name::Symbol)
     col = column(t, name)
+    is_fragmented(ids) && return gather(col, collect(ids))
     out = Vector{eltype(col)}(undef, length(ids))
     i = 0
     for r in ranges(ids), v in segment_views(col, r)
@@ -206,6 +212,15 @@ function Base.getindex(t::ProgressiveTable, ids::RowIds, name::Symbol)
     end
     return out
 end
+
+"""
+    is_fragmented(ids::RowIds) -> Bool
+
+Whether `ids` are scattered (ranges of fewer than 32 ids on average, e.g. a
+query's selection): such rows are read by gathering values, not range by
+range.
+"""
+is_fragmented(ids::RowIds) = length(ids.ranges) > 1 && 32 * length(ids.ranges) > length(ids)
 
 """
     last_id(t::ProgressiveTable) -> Int
@@ -232,6 +247,7 @@ Append the rows of a Tables.jl table (e.g. a `NamedTuple` of vectors) that
 has (at least) the table's columns. Returns the new row ids.
 """
 function Base.append!(t::ProgressiveTable, data)
+    is_view(t) && throw(ArgumentError("append! to a selection view: append to its base table"))
     cols = Tables.columns(data)
     values = [Tables.getcolumn(cols, name) for name in t.names]
     n = isempty(values) ? 0 : length(first(values))
@@ -275,6 +291,7 @@ Update a value of a live row; reported as an update to subscribers that
 have already read the row.
 """
 function Base.setindex!(t::ProgressiveTable, value, id::Integer, name::Symbol)
+    is_view(t) && throw(ArgumentError("setindex! on a selection view: update its base table"))
     col = column(t, name)
     @lock t.lock begin
         check_live(t, id)
@@ -312,6 +329,112 @@ Base.delete!(t::ProgressiveTable, id::Integer) = delete!(t, RowIds(Int(id):Int(i
 function Base.show(io::IO, t::ProgressiveTable)
     print(io, "ProgressiveTable(", length(t), " rows; ",
           join(("$n::$(eltype(c))" for (n, c) in zip(t.names, t.columns)), ", "), ")")
+end
+
+# Selection views
+
+"""
+    selection_view(base::ProgressiveTable) -> ProgressiveTable
+
+A table of selected rows of `base` (ProgressiVis' `PTableSelectedView`):
+it shares base's columns, and its rows are the base rows its producer
+selects, with the same ids, so consumers read it like any table. Selecting
+and deselecting rows (`select!`, `deselect!`, `set_selection!`) reach
+subscribers as created and deleted rows; `touch!` reports updates of
+selected rows (after the base's values changed). Rows can be selected again
+after being deselected. Appends and writes go to the base table.
+
+Unselected ids up to `last_id(view)` are its `deleted` set, so its length
+and progress count only selected rows.
+"""
+function selection_view(base::ProgressiveTable)
+    return ProgressiveTable(copy(base.names), base.columns, 0, RowIds(), TableSubscription[], ReentrantLock(),
+                            base, Dict{Symbol, Any}())
+end
+
+is_view(t::ProgressiveTable) = t.base !== nothing
+
+"""
+    select!(view, ids::RowIds)
+
+Add published rows of the base to a selection view (ids already selected
+are ignored).
+"""
+function select!(v::ProgressiveTable, ids::RowIds)
+    is_view(v) || throw(ArgumentError("select! needs a selection view"))
+    isempty(ids) && return v
+    last(ids) <= last_id(v.base) || throw(ArgumentError("rows after $(last_id(v.base)) are not published in the base"))
+    @lock v.lock begin
+        old_last = last_id(v)
+        # Rows past the old end: new to every subscriber
+        fresh = old_last < last(ids) ? intersect(ids, RowIds(old_last+1:last(ids))) : RowIds()
+        if !isempty(fresh)
+            union!(v.deleted, setdiff!(RowIds(old_last+1:last(ids)), fresh))
+            @atomic v.last_id = last(ids)
+        end
+        # Rows deselected before, now selected again
+        again = intersect(ids, v.deleted)
+        isempty(fresh) || setdiff!(again, fresh)
+        setdiff!(v.deleted, again)
+        for sub in v.subscriptions
+            union!(sub.created, fresh)
+            isempty(again) && continue
+            back = intersect(again, sub.deleted)       # deletion not read yet: an update
+            setdiff!(sub.deleted, back)
+            union!(sub.updated, back)
+            union!(sub.created, setdiff(again, back))
+        end
+    end
+    return v
+end
+
+"""
+    deselect!(view, ids::RowIds)
+
+Remove rows from a selection view (ids not selected are ignored).
+"""
+function deselect!(v::ProgressiveTable, ids::RowIds)
+    is_view(v) || throw(ArgumentError("deselect! needs a selection view"))
+    @lock v.lock begin
+        gone = intersect(ids, live_ids(v))
+        isempty(gone) && return v
+        union!(v.deleted, gone)
+        for sub in v.subscriptions
+            unseen = intersect(gone, sub.created)
+            setdiff!(sub.created, gone)
+            setdiff!(sub.updated, gone)
+            union!(sub.deleted, setdiff(gone, unseen))
+        end
+    end
+    return v
+end
+
+"""
+    set_selection!(view, ids::RowIds)
+
+Make `ids` the selection: subscribers get only the difference.
+"""
+function set_selection!(v::ProgressiveTable, ids::RowIds)
+    current = row_ids(v)
+    deselect!(v, setdiff(current, ids))
+    select!(v, setdiff(ids, current))
+    return v
+end
+
+"""
+    touch!(view, ids::RowIds)
+
+Report the selected rows among `ids` as updated (their values changed in
+the base).
+"""
+function touch!(v::ProgressiveTable, ids::RowIds)
+    @lock v.lock begin
+        changed = intersect(ids, live_ids(v))
+        for sub in v.subscriptions
+            union!(sub.updated, setdiff(changed, sub.created))
+        end
+    end
+    return v
 end
 
 # Subscriptions

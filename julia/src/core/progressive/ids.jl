@@ -128,23 +128,82 @@ end
 
 remove!(s::RowIds, id::Integer) = remove!(s, Int(id):Int(id))
 
+# Set operations: a few ranges are inserted or removed one by one (appends
+# are O(1)); larger sets are merged in one pass over both, O(n + m)
+const FEW_RANGES = 8
+
 function Base.union!(s::RowIds, t::RowIds)
-    for r in t.ranges
-        add!(s, r)
+    isempty(t) && return s
+    if length(t.ranges) <= FEW_RANGES || isempty(s) || first(t) > last(s) + 1
+        foreach(r -> add!(s, r), t.ranges)
+    else
+        s.ranges = merge_union(s.ranges, t.ranges)
     end
     return s
 end
 
 function Base.setdiff!(s::RowIds, t::RowIds)
-    for r in t.ranges
-        remove!(s, r)
+    (isempty(s) || isempty(t)) && return s
+    if length(t.ranges) <= FEW_RANGES
+        foreach(r -> remove!(s, r), t.ranges)
+    else
+        s.ranges = merge_setdiff(s.ranges, t.ranges)
     end
     return s
 end
 
 Base.union(s::RowIds, t::RowIds) = union!(copy(s), t)
 Base.setdiff(s::RowIds, t::RowIds) = setdiff!(copy(s), t)
-Base.intersect(s::RowIds, t::RowIds) = setdiff(s, setdiff(s, t))
+Base.intersect(s::RowIds, t::RowIds) = RowIds(merge_intersect(s.ranges, t.ranges))
+
+function merge_union(a::Vector{UnitRange{Int}}, b::Vector{UnitRange{Int}})
+    out = UnitRange{Int}[]
+    sizehint!(out, length(a) + length(b))
+    i, j = 1, 1
+    while i <= length(a) || j <= length(b)
+        r = if j > length(b) || (i <= length(a) && first(a[i]) <= first(b[j]))
+            i += 1; a[i - 1]
+        else
+            j += 1; b[j - 1]
+        end
+        if !isempty(out) && first(r) <= last(out[end]) + 1
+            last(r) > last(out[end]) && (out[end] = first(out[end]):last(r))
+        else
+            push!(out, r)
+        end
+    end
+    return out
+end
+
+function merge_setdiff(a::Vector{UnitRange{Int}}, b::Vector{UnitRange{Int}})
+    out = UnitRange{Int}[]
+    j = 1
+    for r in a
+        cur = first(r)
+        while j <= length(b) && last(b[j]) < cur
+            j += 1
+        end
+        k = j
+        while k <= length(b) && first(b[k]) <= last(r)
+            first(b[k]) > cur && push!(out, cur:first(b[k])-1)
+            cur = max(cur, last(b[k]) + 1)
+            k += 1
+        end
+        cur <= last(r) && push!(out, cur:last(r))
+    end
+    return out
+end
+
+function merge_intersect(a::Vector{UnitRange{Int}}, b::Vector{UnitRange{Int}})
+    out = UnitRange{Int}[]
+    i, j = 1, 1
+    while i <= length(a) && j <= length(b)
+        lo, hi = max(first(a[i]), first(b[j])), min(last(a[i]), last(b[j]))
+        lo <= hi && push!(out, lo:hi)
+        last(a[i]) < last(b[j]) ? (i += 1) : (j += 1)
+    end
+    return out
+end
 
 """
     take_first!(s::RowIds, n::Integer) -> RowIds

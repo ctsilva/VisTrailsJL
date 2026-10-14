@@ -68,6 +68,7 @@ export get_input_list
 # Progressive data layer exports
 export RowIds, add!, remove!, take_first!, ranges
 export ProgressiveTable, SegmentedColumn, column, column_names, row_ids, last_id, segment_views, gather
+export selection_view, is_view, select!, deselect!, set_selection!, touch!
 export ProgressiveDict, snapshot, ProgressiveValue, set!, has_value, current_value
 export subscribe!, unsubscribe!, has_changes, reset!, pending
 export AbstractSubscription, TableSubscription, DictSubscription, ValueSubscription
@@ -81,7 +82,7 @@ export ExecutionHistory, export_execution_history, execution_history_json, Versi
 export add_version!
 export ExecutionStyle, OneShot, Progressive, execution_style, StepResult, StepContext
 export init_state, step!, finish!, default_step_size
-export param, has_input, input_container, input_subscription, input_value, set_output!
+export param, has_input, input_container, input_subscription, input_value, set_output!, producers_done
 export define_fold_module!, define_map_module!, numeric_columns, consumed_rows
 export on_module_step, on_sweep
 export Vistrail, Pipeline, ModuleInstance, Connection

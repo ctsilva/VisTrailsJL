@@ -158,6 +158,15 @@ end
 input_has_changes(ctx::StepContext) =
     any(has_changes(sub) for subs in values(ctx.subscriptions) for sub in subs)
 
+"""
+    producers_done(ctx) -> Bool
+
+Whether every module feeding this one has finished (always true outside a
+progressive run), e.g. to stop waiting for more rows before starting.
+"""
+producers_done(ctx::StepContext) =
+    ctx.run === nothing || all(p -> ctx.run.engine_state.modules[p].status == :done, ctx.producers)
+
 # Time predictor: items per second over the last steps, ignoring each
 # module's first step that processed items (it includes JIT compilation of
 # the code that processes them; an earlier empty step may not)

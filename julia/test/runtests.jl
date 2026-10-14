@@ -63,7 +63,8 @@ const TEST_SUITES = Dict(
             "test_interaction.jl",
             "test_provenance.jl",
             "test_convergence.jl",
-            "test_progressivis_modules.jl"
+            "test_progressivis_modules.jl",
+            "test_indexes.jl"
         ]
     ),
     "execution" => Dict(

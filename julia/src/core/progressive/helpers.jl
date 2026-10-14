@@ -179,12 +179,20 @@ end
 """
     column_chunks(table, columns, ids::RowIds; row_ids=false) -> iterator of NamedTuple
 
-Contiguous chunks of column views covering `ids`, one per storage segment;
-with `row_ids`, each chunk also has the field `_id`, the ids of its rows.
+Contiguous chunks of column views covering `ids`, one per storage segment
+(scattered ids: one chunk of gathered values); with `row_ids`, each chunk
+also has the field `_id`, the ids of its rows.
 """
 function column_chunks(table::ProgressiveTable, columns::Vector{Symbol}, ids::RowIds; row_ids::Bool=false)
     names = row_ids ? (Tuple(columns)..., :_id) : Tuple(columns)
     cols = [column(table, c) for c in columns]
+    if is_fragmented(ids)
+        # Scattered rows (a selection): gather them into one dense chunk
+        list = collect(ids)
+        values = Any[gather(c, list) for c in cols]
+        row_ids && push!(values, list)
+        return [NamedTuple{names}(Tuple(values))]
+    end
     chunks = NamedTuple{names}[]
     for r in ranges(ids)
         views = [segment_views(c, r) for c in cols]

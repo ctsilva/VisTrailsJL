@@ -8,6 +8,8 @@ Modules for the progressive engine (docs/EXECUTION.md):
   `Quantiles`, `KLLSketch`, `Histogram1DCategorical`, `Distinct`, `Corr`, `IdxMin`, `IdxMax`
 - maps over a table: `Filter`, `Select`
 - `Sample`: a random sample of rows, kept up to date (reservoir)
+- indexes and queries: `BinningIndex`; `RangeQuery`, `RangeQuery2D`, `SimpleFilter`,
+  `CategoricalQuery`, `Intersection` (selection views); `Percentiles`
 - `Sink`: consumes its input
 
 They also run in the one-shot engines, as a single unbounded pass.
@@ -17,6 +19,7 @@ include("sources.jl")
 include("statistics.jl")
 include("relational.jl")
 include("sampling.jl")
+include("indexes.jl")
 
 const PROGRESSIVE_PACKAGE = "org.vistrails.progressive"
 
@@ -26,6 +29,7 @@ function initialize_progressive_package!()
     register_progressive_statistics!()
     register_progressive_relational!()
     register_progressive_sampling!()
+    register_progressive_indexes!()
     register_package_short_name!("progressive", PROGRESSIVE_PACKAGE)
     println("  ✓ Progressive package initialized")
 end

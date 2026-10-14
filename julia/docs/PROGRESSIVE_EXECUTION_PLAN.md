@@ -489,3 +489,29 @@ Import its module catalog as descriptors, or drive it as an external engine.
   1.02 s with all cores (Python's best 1.40 s); first heatmap after
   ~250 ms (a whole row group is decoded first). Decoding (~90 M values/s)
   dominates; decoding row groups ahead on other threads did not help.
+
+- 2026-10-13: ProgressiVis modules, tier 2: indexes and queries. Data layer:
+  selection views (a `ProgressiveTable` sharing its base's columns, with the
+  unselected ids as its deleted set, so every module consumes query results
+  unchanged; rows can be re-selected: a deletion not yet read becomes an
+  update), `meta` for what a producer attaches (the index), linear-time
+  `RowIds` merges (inserting ranges one by one was quadratic for scattered
+  selections), gathering reads for scattered ids (fold chunks were one per
+  range: one per row for a selection over random order), `producers_done`.
+  Modules: `BinningIndex` (one or more columns: also ProgressiVis'
+  `BinningIndexND`), `RangeQuery`, `RangeQuery2D`, `SimpleFilter`,
+  `CategoricalQuery`, `Intersection`, `Percentiles` (exact, from bin counts
+  and a partial sort of one bin). Bins are stored sparsely: a first version
+  allocated bins from min to max as ProgressiVis does, and the January taxi
+  coordinates (outliers) needed 2.2 M and 8.1 M bins; now ~1 770 per column.
+  Tests: brute force after every step under random step sizes, bin widths,
+  workers; bounds moved during a run; updates and deletions; one-shot
+  engine (queries scan). Measured on 14.8 M trips, 10 threads: load + index
+  + first query (7.9 M trips) 0.56 s, zoom re-query (585 K trips, histogram
+  and count downstream) 0.24 s, both exact.
+
+  Open: `RangeQuery`'s `min`/`max` outputs (effective bounds) and
+  ProgressiVis' `bin_timestamps` (re-query only changed bins) are not
+  ported; `Intersection` recomputes from its inputs at each change (O(rows));
+  scattered selections cost 16 bytes per row (roaring-style containers
+  would cut that); TaxiVis does not use the index yet (its zoom rescans).

@@ -29,6 +29,8 @@ as they are added; the design and the remaining phases are in
 | Live input changes recorded as versions (`VersionRecorder`) | Phase 5b | [Provenance of progressive runs](#provenance-of-progressive-runs) |
 | Arrow source (`ArrowLoader`), reads at arbitrary row ids (`gather`); example: progressive TaxiVis | TaxiVis | [Progressive modules](#progressive-modules) |
 | ProgressiVis modules, tier 1: `ParquetLoader`, `Quantiles`, `KLLSketch`, `Histogram1DCategorical`, `Distinct`, `Corr`, `IdxMin`, `IdxMax`, `Sample` | ProgressiVis modules | [Progressive modules](#progressive-modules) |
+| Selection views of tables (`selection_view`, `select!`, `deselect!`, `set_selection!`, `touch!`); linear-time `RowIds` set operations | ProgressiVis modules | [Selection views](#selection-views) |
+| ProgressiVis modules, tier 2: `BinningIndex`, `RangeQuery`, `RangeQuery2D`, `SimpleFilter`, `CategoricalQuery`, `Intersection`, `Percentiles` | ProgressiVis modules | [Progressive modules](#progressive-modules) |
 | Convergence: sources load only while a result downstream needs more data (`converged`), and resume when one does again | TaxiVis | [Convergence](#convergence) |
 
 ## Quick start
@@ -579,6 +581,13 @@ notebooks). Tables flow through ports named `table` (input) and `result`
 | `Corr` | `columns` (default: numeric), `mode` (`"Pearson"` or `"CovarianceOnly"`) | `ProgressiveDict` `(a, b)` → correlation (covariance), every ordered pair |
 | `IdxMin`, `IdxMax` | `columns` (default: numeric) | `ProgressiveDict` column → `(id=row id, value=)`; ties: first row; NaN skipped |
 | `Sample` | `samples` (50), `seed` (42) | table of `samples` uniformly sampled rows (reservoir, Algorithm L), replaced in place as rows arrive; port `select`: their input row ids; the same sample whatever the step sizes; input deletions restart it |
+| `BinningIndex` | `column` or `columns`, `tol` (bin width; negative: \|tol\| % of the 5th-95th percentile range of the first rows; -1), `init_threshold` (rows before sizing bins; 10 000) | `result`: selection view of the indexed rows, carrying the index (`meta[:index]`); `min`, `max`: `ProgressiveDict` per column |
+| `RangeQuery` | input `index` (a `BinningIndex` result); `column`, `lower`, `upper` (`lower` ≤ value < `upper`; unset or NaN: unbounded) | selection view of the matching rows |
+| `RangeQuery2D` | input `index`; `x_column`, `y_column`, `x_lower`, `x_upper`, `y_lower`, `y_upper` | selection view |
+| `SimpleFilter` | input `index`; `column`, `op` (`<`, `<=`, `>`, `>=`, `==`), `value` | selection view |
+| `CategoricalQuery` | `column`, `choice` (values to keep) | selection view (scans; no index) |
+| `Intersection` | several selection views of one table on `table` | selection view of the rows in all of them |
+| `Percentiles` | input `index`; `column`, `percentiles` (0-100; `[25, 50, 75]`) | `ProgressiveDict` percentile → value; exact (numpy's "lower") |
 | `Filter` | `column`, `op` (`<`, `<=`, `>`, `>=`, `==`, `!=`), `value` | table of the matching rows |
 | `Select` | `columns` | table with those columns |
 | `Sink` | — (consumes any input) | port `count`: rows consumed |
@@ -592,7 +601,18 @@ the last few; `Sample` outputs a table of the sampled rows rather than a
 view of the input. Sketch results (`Quantiles`, `KLLSketch`) are within
 their rank error at every step but are not bit-identical across step sizes
 (sketches merge along step boundaries); the other results are exact.
-`Percentiles` (over a `BinningIndex`) comes with the indexes (tier 2).
+Queries (tier 2) work as ProgressiVis': a bound change re-queries the
+index (whole bins between the bounds' bins, values checked in those two
+bins only, so results are exact) and consumers receive just the difference
+in the selection; new, updated and deleted rows are checked as they come.
+Bounds are parameters, so a connected `Variable` drives them live. Only
+non-empty bins are stored (ProgressiVis allocates every bin from min to
+max: taxi coordinates with outliers at 0 would need millions). In the
+one-shot engines, query inputs arrive as plain tables without the index
+and queries scan; `Intersection` needs the progressive engine (row ids).
+On the 14.8 M January trips (10 threads, compiled): load, index two
+columns and query a box of 7.9 M trips in 0.56 s; re-query a zoomed box
+(585 K trips, histogram and count downstream) in 0.24 s.
 
 In a workflow notebook:
 
@@ -715,6 +735,31 @@ Tables.columntable(t)     # a Tables.jl snapshot of the live rows (works with Da
   views covering a range of ids, e.g. `sum(sum, segment_views(col, r))`;
   `t[ids, :x]` copies values through them; `gather(column(t, :x), ids)`
   reads values at arbitrary ids (e.g. a selection's).
+
+### Selection views
+
+A selection view is a table of selected rows of another table
+(ProgressiVis' `PTableSelectedView`); queries output them. It shares the
+base table's columns and row ids, so any module reads it like a table;
+selecting and deselecting rows reach its subscribers as created and deleted
+rows.
+
+```julia
+v = selection_view(t)               # empty selection of t's rows
+select!(v, RowIds([2, 5, 9]))       # subscribers: created
+deselect!(v, RowIds([5]))           # subscribers: deleted (it can be selected again)
+set_selection!(v, ids)              # subscribers get only the difference
+touch!(v, ids)                      # selected rows among ids changed in t: updated
+v.meta[:index]                      # what its producer attached (BinningIndex: the index)
+```
+
+Unselected ids up to `last_id(v)` are its `deleted` set, so `length` and
+progress count only selected rows. Appends and writes go to the base table.
+Scattered ids (ranges of fewer than 32 ids on average) are read by
+gathering values (`t[ids, :x]`, fold chunks) rather than range by range.
+`RowIds` set operations (`union`, `setdiff`, `intersect`) merge in one pass
+when both sides have many ranges; a scattered selection costs 16 bytes per
+row (a range per id), against about 2 for ProgressiVis' roaring bitmaps.
 
 ### Subscriptions
 
@@ -850,6 +895,14 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
   log entry identifies the computation, not only the module id.
 
 ## Changelog
+
+- **ProgressiVis modules, tier 2 (2026-10-13)**: selection views of tables
+  (`selection_view`, `select!`, `deselect!`, `set_selection!`, `touch!`,
+  `meta`); linear-time `RowIds` `union`/`setdiff`/`intersect`; scattered ids
+  read by gathering; `producers_done(ctx)`. Modules `BinningIndex` (sparse
+  equal-width bins), `RangeQuery`, `RangeQuery2D`, `SimpleFilter`,
+  `CategoricalQuery`, `Intersection`, `Percentiles`. Tests:
+  `test_indexes.jl`.
 
 - **ProgressiVis modules, tier 1 (2026-10-13)**: `ParquetLoader`
   (Parquet2.jl), `Quantiles` and `KLLSketch` (KLL sketch, mergeable, so
