@@ -454,3 +454,38 @@ Import its module catalog as descriptors, or drive it as an external engine.
   (could follow the display: a JND model); neighborhoods count even when
   the neighborhood layer is hidden (the page's layer is not sent to the
   server).
+
+- 2026-10-13: ProgressiVis modules, tier 1 of four. Plan for porting
+  ProgressiVis' ~90 module classes, by need: (1) the modules of the paper's
+  experiments and single-pass statistics; (2) indexes and queries
+  (`BinningIndex`, `RangeQuery`/`2D`, `CategoricalQuery`, `SimpleFilter`,
+  `Intersection`, `Percentiles`; overlaps the deferred TaxiVis spatial
+  index); (3) relational (`GroupBy`/`Aggregate`, joins, `Merge`, `Paste`,
+  `Switch`, element-wise operations as one generic module); (4) analytics
+  (`MBKMeans`, `PPCA`, scalers, `KernelDensity`, `TSNE`, blobs). Not
+  ported: Python-specific modules (NumExpr, MixUfunc, DataShape, facades,
+  pyarrow/threaded CSV variants, VEC), test utilities (`Stirrer`, `Wait`),
+  display modules (`Heatmap`, `MCScatterPlot`, `StatsFactory`: the browser
+  layer's job).
+
+  Tier 1 done: `ParquetLoader` (Parquet2.jl: reads the paper's January
+  file, 15 row groups, in 0.4 s), `Quantiles` and `KLLSketch` (own KLL
+  sketch, `kll.jl`: rank error <= 1.5% at k = 200 on 2 M values, merges
+  level by level so they are data-parallel), `Histogram1DCategorical`,
+  `Distinct`, `Corr` (co-moments merged as Var's), `IdxMin`/`IdxMax`
+  (folds now take `row_ids` and `key_type`), `Sample` (Algorithm L; the
+  same sample whatever the step sizes). Tested for prefix consistency under
+  random step sizes, final results, the one-shot and parallel engines,
+  input updates and deletions. Found: ProgressiVis' `IdxMax` swaps the
+  two cases when merging a step (`op[col] = prev_idx[col]` when the new
+  value is larger): its maximum value is right but its row is not
+  (checked: values 1, 9, 2, …, 7 in steps of 3 give row 7 for the maximum
+  9 at row 1); ours is tested against `argmax`.
+
+  Parquet: loading Parquet2.jl at all slowed the dashboard from Arrow by
+  ~12% (0.31 → 0.35 s, A/B against the previous commit), so it is loaded
+  on the first `ParquetLoader` run. The dashboard from the paper's Parquet
+  file, like for like with Python: 1.92 s on one thread (Python 1.74 s),
+  1.02 s with all cores (Python's best 1.40 s); first heatmap after
+  ~250 ms (a whole row group is decoded first). Decoding (~90 M values/s)
+  dominates; decoding row groups ahead on other threads did not help.

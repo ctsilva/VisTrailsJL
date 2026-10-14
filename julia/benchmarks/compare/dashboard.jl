@@ -12,8 +12,9 @@ their range, and change (restarting the histogram) only when min/max leave
 them or shrink by more than that margin.
 
 Sources: "memory" (the six columns of January, stratified order, already in
-a ProgressiveTable, as ProgressiVis' Constant) or "arrow" (ArrowLoader over
-data/strat.arrow, memory-mapped). A warm-up run on the first 200 000 rows,
+a ProgressiveTable, as ProgressiVis' Constant), "arrow" (ArrowLoader over
+data/strat.arrow, memory-mapped) or "parquet" (ParquetLoader over
+data/strat.parquet, Python's file source). A warm-up run on the first 200 000 rows,
 from the same kind of source, compiles the code first unless "warmup": false.
 
 Checks: the pickup histogram equals a batch count of all rows with the final
@@ -27,6 +28,8 @@ using Statistics
 
 const DATA = joinpath(@__DIR__, "data", "strat.arrow")
 const WARMUP_ARROW = joinpath(@__DIR__, "data", "strat_warmup.arrow")   # first 200 000 rows
+const PARQUET = joinpath(@__DIR__, "data", "strat.parquet")
+const WARMUP_PARQUET = joinpath(@__DIR__, "data", "strat_warmup.parquet")   # prepare_data.py
 const COLUMNS = [:pickup_long, :pickup_lat, :dropoff_long, :dropoff_lat, :distance, :passengers]
 const BINS = 512
 
@@ -48,6 +51,8 @@ function build(source::String; var::Bool, rows=nothing)
     p = Pipeline()
     src = if source == "memory"
         node!(p, BENCH, "ConstantTable"; key=rows === nothing ? "all" : "warmup")
+    elseif source == "parquet"
+        node!(p, P, "ParquetLoader"; path=rows === nothing ? PARQUET : WARMUP_PARQUET)
     else
         node!(p, P, "ArrowLoader"; path=rows === nothing ? DATA : WARMUP_ARROW)
     end

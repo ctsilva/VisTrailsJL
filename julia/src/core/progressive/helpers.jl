@@ -35,6 +35,8 @@ struct FoldSpec
     output::Symbol
     output_type::Type
     merge::Union{Function, Nothing}   # (acc, acc) -> acc, enables data parallelism
+    key_type::Type       # of the result dict's keys (output=:dict)
+    row_ids::Bool        # chunks carry the row ids they cover (`_id`)
 end
 
 struct MapSpec
@@ -63,7 +65,8 @@ end
 """
     define_fold_module!(package, name; init, update, result, output=:dict,
                         output_type=Dict{Symbol, Float64}, input="table",
-                        columns=numeric_columns, parameters=[])
+                        columns=numeric_columns, parameters=[], key_type=Symbol,
+                        row_ids=false)
 
 Register a progressive module that folds the rows of the table connected to
 `input` into an accumulator:
@@ -72,11 +75,14 @@ Register a progressive module that folds the rows of the table connected to
 - `update(acc, chunk, ctx)` → new accumulator, where `chunk` is a
   `NamedTuple` of contiguous column views (one call per storage segment);
 - `result(acc, ctx)` → the published result: a `Dict` written into the
-  `ProgressiveDict` output `result` (`output=:dict`; only changed keys are
-  reported), or a value set into the `ProgressiveValue` output `result`
+  `ProgressiveDict{key_type, Any}` output `result` (`output=:dict`; only
+  changed keys are reported, so return new objects, not mutated ones), or a
+  value set into the `ProgressiveValue` output `result`
   (`output=:value`, of type `output_type`).
 
-`ctx` gives access to parameters (`param(ctx, "bins", 10)`).
+`ctx` gives access to parameters (`param(ctx, "bins", 10)`). With
+`row_ids=true`, each chunk also has a field `_id`: the row ids of its rows
+(a range).
 
 With `merge(acc1, acc2)` → accumulator (combining the folds of two
 consecutive pieces of rows, where `init` is the identity), the rows of a
@@ -92,9 +98,11 @@ function define_fold_module!(package::String, name::String;
                              merge::Union{Function, Nothing}=nothing,
                              output::Symbol=:dict, output_type::Type=Dict{Symbol, Float64},
                              input::String="table", columns::Function=numeric_columns,
-                             parameters::Vector=Tuple{String, Type}[])
+                             parameters::Vector=Tuple{String, Type}[], key_type::Type=Symbol,
+                             row_ids::Bool=false)
     output in (:dict, :value) || throw(ArgumentError("output must be :dict or :value"))
-    FOLD_SPECS[(package, name)] = FoldSpec(input, columns, init, update, result, output, output_type, merge)
+    FOLD_SPECS[(package, name)] = FoldSpec(input, columns, init, update, result, output, output_type, merge,
+                                           key_type, row_ids)
     register_module!(ModuleDescriptor(package, name, FoldModule{Symbol(package), Symbol(name)},
         [InputPort(input, ProgressiveTable); control_ports(parameters)],
         [OutputPort("result", output == :dict ? ProgressiveDict : ProgressiveValue)],
@@ -163,22 +171,36 @@ function init_state(T::Type{<:FoldModule}, ctx::StepContext)
     table = input_container(ctx, s.input)
     table isa ProgressiveTable || error("$(ctx.mod.descriptor.name): input '$(s.input)' must be a table")
     columns = s.columns(ctx, table)
-    output = s.output == :dict ? ProgressiveDict{Symbol, Any}() : ProgressiveValue{s.output_type}()
+    output = s.output == :dict ? ProgressiveDict{s.key_type, Any}() : ProgressiveValue{s.output_type}()
     set_output!(ctx, "result", output)
     return FoldState(s, table, input_subscription(ctx, s.input), columns, s.init(ctx, columns), output)
 end
 
 """
-    column_chunks(table, columns, ids::RowIds) -> iterator of NamedTuple
+    column_chunks(table, columns, ids::RowIds; row_ids=false) -> iterator of NamedTuple
 
-Contiguous chunks of column views covering `ids`, one per storage segment.
+Contiguous chunks of column views covering `ids`, one per storage segment;
+with `row_ids`, each chunk also has the field `_id`, the ids of its rows.
 """
-function column_chunks(table::ProgressiveTable, columns::Vector{Symbol}, ids::RowIds)
-    names = Tuple(columns)
+function column_chunks(table::ProgressiveTable, columns::Vector{Symbol}, ids::RowIds; row_ids::Bool=false)
+    names = row_ids ? (Tuple(columns)..., :_id) : Tuple(columns)
     cols = [column(table, c) for c in columns]
     chunks = NamedTuple{names}[]
     for r in ranges(ids)
         views = [segment_views(c, r) for c in cols]
+        if row_ids
+            views = Any[views...]
+            # The segment boundaries of r (the same for every column)
+            seg = isempty(cols) ? typemax(Int) : first(cols).segment_size
+            pieces = UnitRange{Int}[]
+            i = first(r)
+            while i <= last(r)
+                n = min(last(r) - i + 1, seg - (i - 1) % seg)
+                push!(pieces, i:i+n-1)
+                i += n
+            end
+            push!(views, pieces)
+        end
         isempty(views) && continue
         for k in eachindex(first(views))
             push!(chunks, NamedTuple{names}(Tuple(v[k] for v in views)))
@@ -206,7 +228,7 @@ function step!(s::FoldState, ctx::StepContext, budget::Int)
 
     ids = next_created!(s.sub, budget)
     isempty(ids) && return StepResult(:blocked, 0)
-    chunks = column_chunks(s.table, s.columns, ids)
+    chunks = column_chunks(s.table, s.columns, ids; row_ids=s.spec.row_ids)
     if s.spec.merge === nothing
         for chunk in chunks
             s.acc = s.spec.update(s.acc, chunk, ctx)

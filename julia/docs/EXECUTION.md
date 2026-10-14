@@ -28,6 +28,7 @@ as they are added; the design and the remaining phases are in
 | Progress of partial results in provenance; execution history for ProgressiVis' viewer | Phase 5b | [Provenance of progressive runs](#provenance-of-progressive-runs) |
 | Live input changes recorded as versions (`VersionRecorder`) | Phase 5b | [Provenance of progressive runs](#provenance-of-progressive-runs) |
 | Arrow source (`ArrowLoader`), reads at arbitrary row ids (`gather`); example: progressive TaxiVis | TaxiVis | [Progressive modules](#progressive-modules) |
+| ProgressiVis modules, tier 1: `ParquetLoader`, `Quantiles`, `KLLSketch`, `Histogram1DCategorical`, `Distinct`, `Corr`, `IdxMin`, `IdxMax`, `Sample` | ProgressiVis modules | [Progressive modules](#progressive-modules) |
 | Convergence: sources load only while a result downstream needs more data (`converged`), and resume when one does again | TaxiVis | [Convergence](#convergence) |
 
 ## Quick start
@@ -566,14 +567,32 @@ notebooks). Tables flow through ports named `table` (input) and `result`
 | `RandomTable` | `columns` (default `["x", "y"]`), `rows` (1 000 000), `seed` (0) | table of uniform `Float64`; same rows whatever the step sizes |
 | `CSVLoader` | `path`, `columns` (optional subset) | table; types inferred from the first 1 000 rows, integers widened to `Float64` |
 | `ArrowLoader` | `path`, `columns` (optional subset), `throttle` (max rows per step, 0: none), `rate` (max rows per second, in chunks of 50 ms of rows; 0: none) | table with the file's column types; the file is memory-mapped |
+| `ParquetLoader` | `path`, `columns` (optional subset) | table with the file's column types (nullable floats: plain, null as NaN; other nullable columns keep `missing`); decodes one row group at a time (Parquet2.jl, ~90 M values/s), loaded on first use |
 | `Count` | — | `ProgressiveValue{Int}` |
 | `Min`, `Max`, `Mean`, `Var` | `columns` (default: numeric columns) | `ProgressiveDict` column → value |
 | `Histogram1D` | `column`, `bins` (64), `min`, `max` | `ProgressiveValue{Vector{Int}}` |
 | `Histogram2D` | `x_column`, `y_column`, `xbins`, `ybins`, `xmin`, `xmax`, `ymin`, `ymax` | `ProgressiveValue{Matrix{Int}}` |
+| `Quantiles` | `columns` (default: numeric), `quantiles` (`[0.25, 0.5, 0.75]`), `k` (200) | `ProgressiveDict` column → quantile values; KLL sketch, rank error ≈ 1.65/k (0 and 1: exact min, max) |
+| `KLLSketch` | `column`, `quantiles`, `binning` (number of bins), `k` (200) | `ProgressiveDict`: `n`, `min`, `max`, `quantiles`, and with `binning` `splits` (bin edges) and `pmf` (approximate fraction per bin) |
+| `Histogram1DCategorical` | `column` (any type) | `ProgressiveDict` value → count |
+| `Distinct` | `columns` (default: all), `threshold` (56) | `ProgressiveDict` column → `Set` of values, or `nothing` once more than `threshold` |
+| `Corr` | `columns` (default: numeric), `mode` (`"Pearson"` or `"CovarianceOnly"`) | `ProgressiveDict` `(a, b)` → correlation (covariance), every ordered pair |
+| `IdxMin`, `IdxMax` | `columns` (default: numeric) | `ProgressiveDict` column → `(id=row id, value=)`; ties: first row; NaN skipped |
+| `Sample` | `samples` (50), `seed` (42) | table of `samples` uniformly sampled rows (reservoir, Algorithm L), replaced in place as rows arrive; port `select`: their input row ids; the same sample whatever the step sizes; input deletions restart it |
 | `Filter` | `column`, `op` (`<`, `<=`, `>`, `>=`, `==`, `!=`), `value` | table of the matching rows |
 | `Select` | `columns` | table with those columns |
 | `Sink` | — (consumes any input) | port `count`: rows consumed |
 | `Variable` | `value` (initial) | `ProgressiveValue`: an input, set with `set_variable!` |
+
+The modules after `Count`…`Histogram2D` in the table are ports of
+ProgressiVis' (`progressivis/stats`, `io`). Differences: `Quantiles`
+publishes the requested quantiles instead of answering per-quantile hints;
+`IdxMin`/`IdxMax` publish the current row and value instead of a table of
+the last few; `Sample` outputs a table of the sampled rows rather than a
+view of the input. Sketch results (`Quantiles`, `KLLSketch`) are within
+their rank error at every step but are not bit-identical across step sizes
+(sketches merge along step boundaries); the other results are exact.
+`Percentiles` (over a `BinningIndex`) comes with the indexes (tier 2).
 
 In a workflow notebook:
 
@@ -620,7 +639,10 @@ define_map_module!("my.package", "Radius";
 - A fold's `update` receives `chunk`, a `NamedTuple` of contiguous column
   views (one call per storage segment); updates or deletions in the input
   restart the fold from all rows. `output=:value` publishes `result` into a
-  `ProgressiveValue` instead of a dict. Parameters: `param(ctx, "name", default)`.
+  `ProgressiveValue` instead of a dict; `key_type` sets the dict's key type
+  (default `Symbol`); `row_ids=true` adds the field `_id` to each chunk
+  (the row ids it covers). A dict result reports only changed keys, so
+  return new objects rather than mutated ones. Parameters: `param(ctx, "name", default)`.
 - A map's output rows follow their input rows: updated inputs are
   re-mapped, deleted inputs delete their outputs.
 
@@ -828,6 +850,14 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
   log entry identifies the computation, not only the module id.
 
 ## Changelog
+
+- **ProgressiVis modules, tier 1 (2026-10-13)**: `ParquetLoader`
+  (Parquet2.jl), `Quantiles` and `KLLSketch` (KLL sketch, mergeable, so
+  data-parallel), `Histogram1DCategorical`, `Distinct`, `Corr`, `IdxMin`,
+  `IdxMax` (folds), `Sample` (reservoir, Algorithm L); folds take
+  `key_type` and `row_ids`. Parquet2.jl is loaded only when a
+  `ParquetLoader` runs (loading it slowed the Arrow dashboard by ~12%).
+  Tests: `test_progressivis_modules.jl`.
 
 - **Performance (2026-10-13)**: folds with `merge` fold groups of
   blocks (at most 16 accumulators per step) instead of one accumulator per

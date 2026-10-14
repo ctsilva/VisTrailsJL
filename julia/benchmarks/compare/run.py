@@ -6,7 +6,7 @@ same data. Results go to results/<name>/{e1,e3,e4}.jsonl.
     python3 run.py [--name NAME] [--repeats 3] [--only e1,e3,e4]
 
 E1  taxi dashboard (January 2013, 14.8 M rows): in memory, with and without
-    Var; from file (Python: Parquet, Julia: Arrow). Python: the paper's
+    Var; from file (Python: Parquet; Julia: Parquet and Arrow). Python: the paper's
     bench_one.py, CPython 3.14 std and free-threaded, W = 1, 2, 4 (W > 1 with
     helper threads). Julia: dashboard.jl, 1 thread (W = 1) and all cores
     (W = 1, 4). Fresh process per run; repeats in shuffled order.
@@ -64,7 +64,8 @@ def e1(out, repeats):
         for w in (1, 4):
             configs.append(("python", interp, {"source": "parquet", "workers": w, "width": "budget", "var": True}))
     for threads, w in ((1, 1), (CORES, 4)):
-        configs.append(("julia", threads, {"source": "arrow", "workers": w, "var": True}))
+        for source in ("arrow", "parquet"):
+            configs.append(("julia", threads, {"source": source, "workers": w, "var": True}))
     rng = random.Random(2026)
     with open(out, "a") as f:
         for r in range(repeats):

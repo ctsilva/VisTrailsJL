@@ -1,7 +1,8 @@
 """Inputs of the dashboard experiments, from the January Arrow file of the
 TaxiVis example (stratified order, identical to ProgressiVis' Parquet file):
 the six dashboard columns as data/strat.npz (Python's in-memory source),
-data/strat.parquet (Python's file source) and data/strat.arrow (Julia).
+data/strat.parquet (file source of both), data/strat.arrow (Julia), and
+the first 200 000 rows as data/strat_warmup.parquet (Julia's warm-up).
 
     .venv-std/bin/python prepare_data.py
 """
@@ -20,6 +21,7 @@ t = feather.read_table(SRC, columns=COLUMNS)
 cols = {c: t[c].to_numpy() for c in COLUMNS}
 np.savez(os.path.join(out, "strat.npz"), **cols)
 pq.write_table(pa.table(cols), os.path.join(out, "strat.parquet"))
+pq.write_table(pa.table({c: v[:200_000] for c, v in cols.items()}), os.path.join(out, "strat_warmup.parquet"))
 # Non-nullable fields: Julia reads nullable ones as Union{Missing, T}
 schema = pa.schema([pa.field(c, pa.from_numpy_dtype(v.dtype), nullable=False) for c, v in cols.items()])
 # One record batch, as the TaxiVis file (Arrow.jl reads several as a ChainedVector)

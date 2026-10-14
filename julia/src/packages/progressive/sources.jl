@@ -1,5 +1,5 @@
 """
-Progressive sources: RandomTable, CSVLoader, ArrowLoader; and Sink
+Progressive sources: RandomTable, CSVLoader, ArrowLoader, ParquetLoader; and Sink
 """
 
 using Random
@@ -170,6 +170,93 @@ end
 
 progress(s::ArrowLoaderState) = (s.position, s.rows)
 
+# ParquetLoader: streams the rows of a Parquet file, one row group decoded at a time
+
+# Parquet2.jl is loaded on first use: loading it slows unrelated code (the
+# taxi dashboard from Arrow by ~12%), so programs that read no Parquet do
+# not pay for it. Its functions are called with `invokelatest`, being newer
+# than the calling code.
+const PARQUET2 = Base.PkgId(Base.UUID("98572fba-bba0-415d-956f-fa77e587d26d"), "Parquet2")
+parquet2() = Base.require(PARQUET2)
+
+struct ParquetLoaderModule end
+execution_style(::Type{ParquetLoaderModule}) = Progressive()
+default_step_size(::Type{ParquetLoaderModule}) = 100_000
+
+mutable struct ParquetLoaderState
+    dataset::Any                     # Parquet2.Dataset
+    names::Vector{Symbol}
+    types::Vector{Type}              # of the output columns
+    table::ProgressiveTable
+    group::Int                       # row groups decoded so far
+    current::Vector{AbstractVector}  # the columns of the last one
+    offset::Int                      # its rows already loaded
+    position::Int
+    rows::Int
+end
+
+# Column types: nullable floats become plain floats (null: NaN), as in
+# ProgressiVis' tables; other nullable columns keep `missing`
+function parquet_column_type(T::Type)
+    S = nonmissingtype(T)
+    return S <: AbstractFloat || S === T ? S : T
+end
+
+function open_parquet(path::String)
+    P2 = parquet2()
+    dataset = P2.Dataset(path)
+    schema = Tables.schema(dataset)
+    return dataset, collect(Symbol, schema.names), collect(Type, schema.types),
+           sum(P2.ntablerows, P2.rowgroups(dataset); init=0)
+end
+
+function init_state(::Type{ParquetLoaderModule}, ctx::StepContext)
+    parquet2()     # load first: code running when it loads cannot call it yet
+    dataset, all_names, all_types, rows = Base.invokelatest(open_parquet, String(required_param(ctx, "path")))
+    names = param(ctx, "columns") === nothing ? all_names : as_symbols(param(ctx, "columns"))
+    types = Type[parquet_column_type(all_types[findfirst(==(n), all_names)]) for n in names]
+    table = set_output!(ctx, "result", ProgressiveTable((n => T for (n, T) in zip(names, types))...))
+    return ParquetLoaderState(dataset, names, types, table, 0, AbstractVector[], 0, 0, rows)
+end
+
+function read_row_group(dataset, group::Int, names, types)
+    columns = Tables.columns(parquet2().rowgroups(dataset)[group])
+    return AbstractVector[parquet_column(Tables.getcolumn(columns, n), T) for (n, T) in zip(names, types)]
+end
+
+# Parquet2 decodes ~90 M values/s (one thread), slower than consumers read
+# them: decoding is the cost of this loader. Decoding the next row groups on
+# other threads did not help (measured on the taxi dashboard)
+function decode_row_group!(s::ParquetLoaderState)
+    s.group += 1
+    s.current = Base.invokelatest(read_row_group, s.dataset, s.group, s.names, s.types)
+    s.offset = 0
+end
+
+parquet_column(v::AbstractVector, ::Type{T}) where {T <: AbstractFloat} =
+    Missing <: eltype(v) ? T[x === missing ? T(NaN) : x for x in v] : convert(Vector{T}, v)
+parquet_column(v::AbstractVector, ::Type{T}) where {T} = convert(Vector{T}, v)
+
+function step!(s::ParquetLoaderState, ctx::StepContext, budget::Int)
+    n = 0
+    while n < budget && s.position < s.rows
+        if isempty(s.current) || s.offset == length(first(s.current))
+            decode_row_group!(s)
+            continue
+        end
+        m = min(budget - n, length(first(s.current)) - s.offset)
+        r = s.offset+1:s.offset+m
+        append!(s.table, NamedTuple{Tuple(s.names)}(Tuple(view(c, r) for c in s.current)))
+        s.offset += m
+        s.position += m
+        n += m
+    end
+    s.position == s.rows && (s.current = AbstractVector[])
+    return StepResult(s.position == s.rows ? :done : :ready, n)
+end
+
+progress(s::ParquetLoaderState) = (s.position, s.rows)
+
 # Variable: an input module whose value changes during a run (set_variable!)
 
 struct VariableModule end
@@ -232,6 +319,9 @@ function register_progressive_sources!()
     register_module!(ModuleDescriptor(PROGRESSIVE_PACKAGE, "ArrowLoader", ArrowLoaderModule,
         InputPort[], [OutputPort("result", ProgressiveTable)],
         Tuple{String, Type}[("path", String), ("columns", Vector{String}), ("throttle", Int), ("rate", Float64)]))
+    register_module!(ModuleDescriptor(PROGRESSIVE_PACKAGE, "ParquetLoader", ParquetLoaderModule,
+        InputPort[], [OutputPort("result", ProgressiveTable)],
+        Tuple{String, Type}[("path", String), ("columns", Vector{String})]))
     register_module!(ModuleDescriptor(PROGRESSIVE_PACKAGE, "Variable", VariableModule,
         InputPort[], [OutputPort("result", ProgressiveValue)],
         Tuple{String, Type}[("value", Any)]))

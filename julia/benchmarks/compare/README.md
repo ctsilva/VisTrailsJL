@@ -43,9 +43,10 @@ unchanged on macOS (no `os.sched_getaffinity`; `ru_maxrss` in bytes).
   count of all rows with its final bounds (Python against
   `np.histogram2d`, Julia against its own counting function), and Var
   against a batch variance.
-- **From file**: Python reads Parquet (`ParquetLoader`), Julia Arrow
-  (`ArrowLoader`, memory-mapped, uncompressed). Different formats, so the
-  "from file" rows are not a like-for-like loader comparison.
+- **From file**: Python reads Parquet (`ParquetLoader`, pyarrow); Julia
+  reads the same Parquet file (`ParquetLoader`, Parquet2.jl) or Arrow
+  (`ArrowLoader`, memory-mapped, uncompressed). Only the Parquet rows
+  compare loaders like for like.
 - **Steps**: both size steps to a time quantum; Julia's steps cover more
   rows, so it updates the heatmap fewer times.
 
@@ -59,7 +60,8 @@ Full tables: [`results/2026-10-13-prelim/summary.md`](results/2026-10-13-prelim/
 | E1 dashboard in memory, no Var, W = 1 | 0.93 s | 0.88 s | 0.11 s | 0.05 s |
 | E1 best W (no Var) | 0.28 s (W=2) | 0.27 s (W=2) | – | 0.05 s (W=1) |
 | E1 with Var, best W | 0.37 s | 0.28 s | 0.17 s | 0.04 s (W=4) |
-| E1 from file, with Var (Parquet / Arrow) | 1.46 s (W=4) | 1.40 s (W=4) | 0.31 s | 0.19 s (W=4) |
+| E1 from file, with Var (Python Parquet / Julia Arrow) | 1.46 s (W=4) | 1.40 s (W=4) | 0.31 s | 0.19 s (W=4) |
+| E1 from Parquet, with Var (both), W = 1 / best | 1.74 / 1.46 s | 1.82 / 1.40 s | 1.92 s | 1.02 s (W=4) |
 | E1 first heatmap, memory, W = 1 | 4 ms | 13 ms | 2 ms | 2 ms |
 | E3 four pipelines, W = 4 | 0.38 s | 0.15 s | 0.20 s | 0.13 s |
 | E3 fan-out, W = 4 | 0.18 s | 0.12 s | 0.05 s | 0.03 s |
@@ -84,6 +86,13 @@ Reading them:
   more (9 vs 3 at W = 1) and shows its first heatmap later (110 ms): the
   histograms start on bounds from the first rows while the loader runs
   ahead (the paper's E13 observes the same with pipeline overlap).
+- From the same Parquet file, the gap closes: Julia is slower on one
+  thread (1.92 s vs 1.74 s) and 1.4× faster with all cores (1.02 s vs
+  1.40 s), and shows its first heatmap later (250 ms vs 17-31 ms).
+  Parquet2.jl decodes about 90 M values/s, 1.0 s of the 1.9 s, and decodes
+  a whole row group (1 M rows) before the first rows go out; decoding
+  further row groups on other threads did not help. (Measured after the
+  preliminary run: 3 runs per configuration, not in `results/`.)
 - Julia uses about twice the memory (2.0-2.5 GB vs 1.0-1.5 GB): its
   in-memory table is a copy of the Arrow data, and the runtime is larger.
 
@@ -96,6 +105,7 @@ writes one batch).
 
 Next, for a full set: more repeats with load control; the remaining
 experiments (E5 overlap, E6 latency under load, E8 quality over time, C2
-the year); Julia on the same loader formats as Python (Parquet, CSV); and
-both systems on the Linux machine of the paper.
+the year); Julia's CSV loader against Python's; a faster Parquet decoder
+(or decoding pages rather than whole row groups); and both systems on the
+Linux machine of the paper.
 
