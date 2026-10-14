@@ -532,3 +532,27 @@ Import its module catalog as descriptors, or drive it as an external engine.
   loop over the new ids was dynamic). Not ported: `CombineFirst`, `Paste`,
   `UniqueIndex` (inside `Join`), datetime-part grouping (a map can derive
   the key).
+
+- 2026-10-14: ProgressiVis modules, tier 4: analytics. `Blobs`, `MVBlobs`
+  (row by row: the same rows whatever the step sizes), `MinMaxScaler`,
+  `MBKMeans` (mini-batch, greedy k-means++, labels of every row in passes,
+  centers movable by hand), `MBKMeansFilter`, `PPCA` (incremental PCA,
+  exact at full rank), `PPCATransformer` (drift-based resets, in place),
+  `KernelDensity` (kNN kernel density, exact neighbors), `TSNE`
+  (progressive: exact kNN kept up to date as rows arrive, perplexity
+  calibration, Barnes-Hut). `update_rows!` for bulk in-place updates.
+  Tests against batch computations (172 checks). The first density index
+  (a uniform grid, then a bucket quadtree) did not survive the taxi
+  pickups (outliers make the extent huge; one cell held millions; >8 min,
+  then 12 s); sorted Z-order runs merged as they grow take 2.0 s. t-SNE
+  20.4 → 8.2 s on 10 000 rows (packed nodes, symmetric affinities,
+  Z-order traversal). Compared with ProgressiVis
+  (`benchmarks/compare/results/analytics/summary.md`): k-means 10×, PPCA
+  2×, MinMaxScaler 19×, Blobs 4× faster. Found in ProgressiVis:
+  `MBKMeans` with a column hint fails, a greedy `MBKMeans` never lets a
+  run end, `MinMaxScaler` fails without a `control` input.
+
+  Open: t-SNE neighbors are exact (O(N² d)); an approximate index (as
+  pynene's) would scale it past ~50 000 rows. `MBKMeans`' tolerance is
+  absolute (data units), as ProgressiVis'.
+

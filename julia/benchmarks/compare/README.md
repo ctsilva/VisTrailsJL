@@ -109,3 +109,21 @@ the year); Julia's CSV loader against Python's; a faster Parquet decoder
 (or decoding pages rather than whole row groups); and both systems on the
 Linux machine of the paper.
 
+
+## Analytics modules (tier 4, 2026-10-14)
+
+`analytics.py` (ProgressiVis) and `analytics.jl` (Julia): MBKMeans,
+PPCA (+ PPCATransformer), MinMaxScaler, Blobs on the January trips in
+memory; KernelDensity and TSNE in Julia only (ProgressiVis' need pynene).
+
+```sh
+PYTHONPATH=trees/head .venv-std/bin/python py_shim.py analytics.py [rows|0 [kmeans,ppca,scaler,blobs]]
+julia --project=../.. --threads=N analytics.jl [rows|all [kmeans,ppca,scaler,blobs,kde,tsne]]
+```
+
+Results and notes (ProgressiVis needed three workarounds):
+[`results/analytics/summary.md`](results/analytics/summary.md). In short,
+Julia on 10 threads: k-means 0.34 s median to converge (Python 3.5 s;
+0.06-0.19 ms per iteration against 1.45 ms), PPCA fit 1.3 s (2.6 s), with
+projection 2.8 s (4.9 s), MinMaxScaler 0.50 s (9.7 s), Blobs 0.23 s
+(1.0 s).

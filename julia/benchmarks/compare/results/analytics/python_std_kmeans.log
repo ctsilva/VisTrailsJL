@@ -1,0 +1,20 @@
+Starting scheduler
+# Scheduler added module(s): ['constant_1', 'mbk_means_1', 'sink_1']
+Leaving run loop
+{"workload": "MBKMeans k=10", "seed": 0, "rows": 14776615, "seconds": 3.53666750001139, "iterations": 2442, "ms_per_iteration": 1.4482667895214538, "converged": true}
+Starting scheduler
+# Scheduler added module(s): ['constant_1', 'mbk_means_1', 'sink_1']
+Leaving run loop
+{"workload": "MBKMeans k=10", "seed": 1, "rows": 14776615, "seconds": 1.5313502500066534, "iterations": 1066, "ms_per_iteration": 1.436538696066279, "converged": true}
+Starting scheduler
+# Scheduler added module(s): ['constant_1', 'mbk_means_1', 'sink_1']
+Leaving run loop
+{"workload": "MBKMeans k=10", "seed": 2, "rows": 14776615, "seconds": 15.774978833971545, "iterations": 10955, "ms_per_iteration": 1.4399798114077176, "converged": true}
+Starting scheduler
+# Scheduler added module(s): ['constant_1', 'mbk_means_1', 'sink_1']
+Leaving run loop
+{"workload": "MBKMeans k=10", "seed": 3, "rows": 14776615, "seconds": 2.052431957999943, "iterations": 1293, "ms_per_iteration": 1.58734103480274, "converged": true}
+Starting scheduler
+# Scheduler added module(s): ['constant_1', 'mbk_means_1', 'sink_1']
+Leaving run loop
+{"workload": "MBKMeans k=10", "seed": 4, "rows": 14776615, "seconds": 3.4749975409940816, "iterations": 2292, "ms_per_iteration": 1.5161420335925313, "converged": true}

@@ -1,0 +1,122 @@
+[ Info: Registered module: org.vistrails.vistrails.basic::HTTPFile
+[ Info: Registered module: org.vistrails.vistrails.basic::PythonSource
+[ Info: Registered module: org.vistrails.vistrails.basic::PythonSource
+[ Info: Registered module: org.vistrails.vistrails.basic::Integer
+[ Info: Registered module: org.vistrails.vistrails.basic::Float
+[ Info: Registered module: org.vistrails.vistrails.basic::String
+[ Info: Registered module: org.vistrails.vistrails.basic::Boolean
+[ Info: Registered constant modules: Integer, Float, String, Boolean
+[ Info: Registered module: org.vistrails.vistrails.basic::Tuple
+[ Info: Registered module: org.vistrails.vistrails.basic::Untuple
+[ Info: Registered module: org.vistrails.vistrails.basic::List
+[ Info: Registered module: org.vistrails.vistrails.basic::Round
+[ Info: Registered data structure modules: Tuple, Untuple, List, Round
+[ Info: Registered module: org.vistrails.vistrails.basic::InputPort
+[ Info: Registered module: org.vistrails.vistrails.basic::OutputPort
+[ Info: Registered module: org.vistrails.vistrails.basic::StandardOutput
+[ Info: Registered I/O modules: InputPort, OutputPort, StandardOutput
+[ Info: Registered module: org.vistrails.vistrails.julia::JuliaSource
+[ Info: Registered module: org.vistrails.vistrails.control_flow::If
+[ Info: Registered module: org.vistrails.vistrails.control_flow::While
+[ Info: Registered module: org.vistrails.vistrails.control_flow::And
+[ Info: Registered module: org.vistrails.vistrails.control_flow::Or
+[ Info: Registered module: org.vistrails.vistrails.control_flow::Not
+[ Info: Registered control flow modules: If, While, And, Or, Not
+[ Info: Registered module: org.vistrails.vistrails.control_flow::Sum
+[ Info: Registered module: org.vistrails.vistrails.control_flow::Cross
+[ Info: Registered module: org.vistrails.vistrails.control_flow::Dot
+[ Info: Registered module: org.vistrails.vistrails.control_flow::ElementwiseProduct
+[ Info: Registered vector operation modules: Sum, Cross, Dot, ElementwiseProduct
+[ Info: Registered module: org.vistrails.vistrails.pythoncalc::PythonCalc
+[ Info: Registered module: org.vistrails.vistrails.pythoncalc::PythonCalc
+[ Info: Initializing matplotlib package...
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplFigure
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplFigureOutput
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplLinePlot
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplScatter
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplBar
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplHist
+[ Info:   ✓ Matplotlib package initialized
+[ Info:   Registered modules: MplFigure, MplFigureOutput, MplLinePlot, MplScatter, MplBar, MplHist
+[ Info: Registered module: org.vistrails.progressive::RandomTable
+[ Info: Registered module: org.vistrails.progressive::CSVLoader
+[ Info: Registered module: org.vistrails.progressive::ArrowLoader
+[ Info: Registered module: org.vistrails.progressive::ParquetLoader
+[ Info: Registered module: org.vistrails.progressive::Variable
+[ Info: Registered module: org.vistrails.progressive::Sink
+[ Info: Registered module: org.vistrails.progressive::Count
+[ Info: Registered module: org.vistrails.progressive::Min
+[ Info: Registered module: org.vistrails.progressive::Max
+[ Info: Registered module: org.vistrails.progressive::Mean
+[ Info: Registered module: org.vistrails.progressive::Var
+[ Info: Registered module: org.vistrails.progressive::Histogram1D
+[ Info: Registered module: org.vistrails.progressive::Histogram2D
+[ Info: Registered module: org.vistrails.progressive::Quantiles
+[ Info: Registered module: org.vistrails.progressive::KLLSketch
+[ Info: Registered module: org.vistrails.progressive::Histogram1DCategorical
+[ Info: Registered module: org.vistrails.progressive::Distinct
+[ Info: Registered module: org.vistrails.progressive::Corr
+[ Info: Registered module: org.vistrails.progressive::IdxMin
+[ Info: Registered module: org.vistrails.progressive::IdxMax
+[ Info: Registered module: org.vistrails.progressive::Filter
+[ Info: Registered module: org.vistrails.progressive::Select
+[ Info: Registered module: org.vistrails.progressive::Sample
+[ Info: Registered module: org.vistrails.progressive::BinningIndex
+[ Info: Registered module: org.vistrails.progressive::RangeQuery
+[ Info: Registered module: org.vistrails.progressive::RangeQuery2D
+[ Info: Registered module: org.vistrails.progressive::SimpleFilter
+[ Info: Registered module: org.vistrails.progressive::CategoricalQuery
+[ Info: Registered module: org.vistrails.progressive::Intersection
+[ Info: Registered module: org.vistrails.progressive::Percentiles
+[ Info: Registered module: org.vistrails.progressive::Unary
+[ Info: Registered module: org.vistrails.progressive::ColsBinary
+[ Info: Registered module: org.vistrails.progressive::Reduce
+[ Info: Registered module: org.vistrails.progressive::LinearMap
+[ Info: Registered module: org.vistrails.progressive::GroupBy
+[ Info: Registered module: org.vistrails.progressive::Aggregate
+[ Info: Registered module: org.vistrails.progressive::Join
+[ Info: Registered module: org.vistrails.progressive::JoinById
+[ Info: Registered module: org.vistrails.progressive::Switch
+[ Info: Registered module: org.vistrails.progressive::Blobs
+[ Info: Registered module: org.vistrails.progressive::MVBlobs
+[ Info: Registered module: org.vistrails.progressive::MinMaxScaler
+[ Info: Registered module: org.vistrails.progressive::MBKMeans
+[ Info: Registered module: org.vistrails.progressive::MBKMeansFilter
+[ Info: Registered module: org.vistrails.progressive::PPCA
+[ Info: Registered module: org.vistrails.progressive::PPCATransformer
+[ Info: Registered module: org.vistrails.progressive::KernelDensity
+[ Info: Registered module: org.vistrails.progressive::TSNE
+[ Info: Registered module: org.vistrails.bench::ConstantTable
+[ Info: Registered module: org.vistrails.bench::Bounds2D
+Initializing basic package...
+  ✓ Basic package initialized
+Initializing julia package...
+  ✓ Julia package initialized
+Initializing control_flow package...
+  ✓ Control flow package initialized
+Initializing pythoncalc package...
+  ✓ PythonCalc package initialized
+Initializing progressive package...
+  ✓ Progressive package initialized
+RESULT {"workload":"MBKMeans k=10","seed":0,"seconds_converged":1.7733418941497803,"seconds":1.7772259712219238,"iterations":28598,"ms_per_iteration":0.062009297648429273,"labelled":200000,"rows":200000,"warmup":true,"threads":1}
+RESULT {"workload":"MBKMeans k=10","seed":0,"seconds_converged":1.5682740211486816,"seconds":2.765650987625122,"iterations":20930,"ms_per_iteration":0.07492948022688398,"labelled":14776615,"rows":14776615,"warmup":false,"threads":1}
+RESULT {"workload":"MBKMeans k=10","seed":1,"seconds_converged":0.32860803604125977,"seconds":0.32865190505981445,"iterations":9877,"ms_per_iteration":0.03327002491052544,"labelled":200000,"rows":200000,"warmup":true,"threads":1}
+RESULT {"workload":"MBKMeans k=10","seed":1,"seconds_converged":0.162492036819458,"seconds":1.371527910232544,"iterations":859,"ms_per_iteration":0.18916418721706404,"labelled":14776615,"rows":14776615,"warmup":false,"threads":1}
+RESULT {"workload":"MBKMeans k=10","seed":2,"seconds_converged":0.046495914459228516,"seconds":0.046536922454833984,"iterations":1274,"ms_per_iteration":0.03649600820975551,"labelled":200000,"rows":200000,"warmup":true,"threads":1}
+RESULT {"workload":"MBKMeans k=10","seed":2,"seconds_converged":0.14660215377807617,"seconds":1.3355050086975098,"iterations":758,"ms_per_iteration":0.19340653532727728,"labelled":14776615,"rows":14776615,"warmup":false,"threads":1}
+RESULT {"workload":"MBKMeans k=10","seed":3,"seconds_converged":0.2338390350341797,"seconds":0.23388195037841797,"iterations":9500,"ms_per_iteration":0.024614635266755756,"labelled":200000,"rows":200000,"warmup":true,"threads":1}
+RESULT {"workload":"MBKMeans k=10","seed":3,"seconds_converged":0.4399700164794922,"seconds":1.3190200328826904,"iterations":4734,"ms_per_iteration":0.09293832202777613,"labelled":14776615,"rows":14776615,"warmup":false,"threads":1}
+RESULT {"workload":"MBKMeans k=10","seed":4,"seconds_converged":0.03455090522766113,"seconds":0.03459501266479492,"iterations":1072,"ms_per_iteration":0.03223032204072867,"labelled":200000,"rows":200000,"warmup":true,"threads":1}
+RESULT {"workload":"MBKMeans k=10","seed":4,"seconds_converged":0.9729139804840088,"seconds":1.630784034729004,"iterations":15367,"ms_per_iteration":0.06331190085794292,"labelled":14776615,"rows":14776615,"warmup":false,"threads":1}
+RESULT {"workload":"PPCA (fit)","seconds":0.5219161510467529,"rows":200000,"warmup":true,"threads":1}
+RESULT {"workload":"PPCA (fit)","seconds":1.6347157955169678,"rows":14776615,"warmup":false,"threads":1}
+RESULT {"workload":"PPCA + PPCATransformer","seconds":0.662498950958252,"projected":200000,"resets":2,"rows":200000,"warmup":true,"threads":1}
+RESULT {"workload":"PPCA + PPCATransformer","seconds":4.588732004165649,"projected":14776615,"resets":13,"rows":14776615,"warmup":false,"threads":1}
+RESULT {"workload":"MinMaxScaler (+ Min, Max)","seconds":0.8672440052032471,"scaled":200000,"info":{"clipped":0,"ignored":0,"resets":1},"rows":200000,"warmup":true,"threads":1}
+RESULT {"workload":"MinMaxScaler (+ Min, Max)","seconds":0.7659971714019775,"scaled":14776615,"info":{"clipped":0,"ignored":0,"resets":2},"rows":14776615,"warmup":false,"threads":1}
+RESULT {"workload":"Blobs","rows":200000,"seconds":0.3189418315887451,"warmup":true,"threads":1}
+RESULT {"workload":"Blobs","rows":14776615,"seconds":0.32214879989624023,"warmup":false,"threads":1}
+RESULT {"workload":"KernelDensity (pickups, 32² samples)","seconds":0.7666828632354736,"rows":200000,"warmup":true,"threads":1}
+RESULT {"workload":"KernelDensity (pickups, 32² samples)","seconds":2.5045888423919678,"rows":14776615,"warmup":false,"threads":1}
+RESULT {"workload":"TSNE (50-D blobs)","rows":1000,"seconds":3.237639904022217,"iterations":1000,"warmup":true,"threads":1}
+RESULT {"workload":"TSNE (50-D blobs)","rows":10000,"seconds":28.023927927017212,"iterations":1010,"warmup":false,"threads":1}

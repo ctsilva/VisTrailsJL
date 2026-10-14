@@ -68,7 +68,7 @@ export get_input_list
 # Progressive data layer exports
 export RowIds, add!, remove!, take_first!, ranges
 export ProgressiveTable, SegmentedColumn, column, column_names, row_ids, last_id, segment_views, gather
-export selection_view, is_view, select!, deselect!, set_selection!, touch!
+export selection_view, is_view, select!, deselect!, set_selection!, touch!, update_rows!
 export ProgressiveDict, snapshot, ProgressiveValue, set!, has_value, current_value
 export subscribe!, unsubscribe!, has_changes, reset!, pending
 export AbstractSubscription, TableSubscription, DictSubscription, ValueSubscription

@@ -12,6 +12,8 @@ Modules for the progressive engine (docs/EXECUTION.md):
   `CategoricalQuery`, `Intersection` (selection views); `Percentiles`
 - element-wise: `Unary`, `ColsBinary`, `Reduce`, `LinearMap`
 - grouping and joins: `GroupBy`, `Aggregate`, `Join`, `JoinById`, `Switch`
+- analytics: `Blobs`, `MVBlobs` (sources); `MinMaxScaler`; `MBKMeans`, `MBKMeansFilter`;
+  `PPCA`, `PPCATransformer`; `KernelDensity`; `TSNE`
 - `Sink`: consumes its input
 
 They also run in the one-shot engines, as a single unbounded pass.
@@ -25,6 +27,12 @@ include("indexes.jl")
 include("elementwise.jl")
 include("grouping.jl")
 include("joins.jl")
+include("blobs.jl")
+include("scaling.jl")
+include("kmeans.jl")
+include("pca.jl")
+include("kde.jl")
+include("tsne.jl")
 
 const PROGRESSIVE_PACKAGE = "org.vistrails.progressive"
 
@@ -38,6 +46,12 @@ function initialize_progressive_package!()
     register_progressive_elementwise!()
     register_progressive_grouping!()
     register_progressive_joins!()
+    register_progressive_blobs!()
+    register_progressive_scaling!()
+    register_progressive_kmeans!()
+    register_progressive_pca!()
+    register_progressive_kde!()
+    register_progressive_tsne!()
     register_package_short_name!("progressive", PROGRESSIVE_PACKAGE)
     println("  ✓ Progressive package initialized")
 end

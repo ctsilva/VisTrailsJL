@@ -1,0 +1,72 @@
+Starting scheduler
+# Scheduler added module(s): ['constant_1', 'mbk_means_1', 'sink_1']
+Leaving run loop
+{"workload": "MBKMeans k=10", "rows": 14776615, "seconds": 0.6990590420027729, "iterations": 553, "converged": true, "centers": [[-73.97261048565707, 40.695832503959814], [0.0023367763216306193, 0.0017998422486367911], [-73.9876056037384, 40.74969730264091], [-73.83157632003102, 40.71724506264191], [-73.28506896972655, 39.475639038085916], [-73.96744076971558, 40.76928215770507], [-680.8802130562918, 45.51179449898856], [-73.99889242742805, 40.725726271517026], [-73.95462732194449, 40.82356999287783], [-77.72285345828895, 134.61551585341945]]}
+Starting scheduler
+# Scheduler added module(s): ['constant_1', 'ppca_1', 'sink_1']
+Leaving run loop
+{"workload": "PPCA (fit)", "rows": 14776615, "seconds": 2.6298522499855608}
+Starting scheduler
+# Scheduler added module(s): ['constant_1', 'ppca_1', 'ppca_transformer_1', 'sample_1', 'sink_1']
+Leaving run loop
+{"workload": "PPCA + PPCATransformer", "rows": 14776615, "seconds": 4.906974749988876, "projected": 14776615}
+Traceback (most recent call last):
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/module.py", line 1265, in run
+    run_step_ret = self.run_step(run_number, step_size, quantum)
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/decorators.py", line 113, in run_step_wrapper
+    return run_step_(self, run_number, step_size, quantum)
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/decorators.py", line 113, in run_step_wrapper
+    return run_step_(self, run_number, step_size, quantum)
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/decorators.py", line 113, in run_step_wrapper
+    return run_step_(self, run_number, step_size, quantum)
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/decorators.py", line 174, in decoration_
+    return to_decorate(self, run_number, step_size, quantum)
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/stats/scaling.py", line 206, in run_step
+    control_slot = self.get_input_slot("control")
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/module.py", line 718, in get_input_slot
+    raise KeyError(f"slot '{_name}' not connected")
+KeyError: "slot 'control' not connected"
+<class 'KeyError'> "slot 'control' not connected"
+Starting scheduler
+# Scheduler added module(s): ['constant_1', 'max_1', 'min_1', 'min_max_scaler_1', 'sink_1']
+Traceback (most recent call last):
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/py_shim.py", line 25, in <module>
+    runpy.run_path(script, run_name="__main__")
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen runpy>", line 294, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "analytics.py", line 95, in <module>
+    main()
+    ~~~~^^
+  File "analytics.py", line 80, in main
+    t, sc = timed(scaler)
+            ~~~~~^^^^^^^^
+  File "analytics.py", line 33, in timed
+    aio.run(s.start())
+    ~~~~~~~^^^^^^^^^^^
+  File "/Users/csilva/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/lib/python3.14/asyncio/runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/Users/csilva/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/lib/python3.14/asyncio/runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/csilva/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/lib/python3.14/asyncio/base_events.py", line 720, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/scheduler.py", line 484, in start
+    return await self.start_impl(tick_proc, idle_proc, coros)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/scheduler.py", line 457, in start_impl
+    await self.run()
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/scheduler.py", line 634, in run
+    raise self._run_errors[0]
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/scheduler.py", line 600, in run
+    task.result()  # surface companion errors as well as worker errors
+    ~~~~~~~~~~~^^
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/scheduler.py", line 1033, in _run_loop
+    module.run(self._run_number)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/Users/csilva/src/VisTrailsJL/julia/benchmarks/compare/trees/head/progressivis/core/module.py", line 1314, in run
+    raise RuntimeError("{} {}".format(type(exception), exception))
+RuntimeError: <class 'KeyError'> "slot 'control' not connected"

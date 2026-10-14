@@ -32,6 +32,7 @@ as they are added; the design and the remaining phases are in
 | Selection views of tables (`selection_view`, `select!`, `deselect!`, `set_selection!`, `touch!`); linear-time `RowIds` set operations | ProgressiVis modules | [Selection views](#selection-views) |
 | ProgressiVis modules, tier 2: `BinningIndex`, `RangeQuery`, `RangeQuery2D`, `SimpleFilter`, `CategoricalQuery`, `Intersection`, `Percentiles` | ProgressiVis modules | [Progressive modules](#progressive-modules) |
 | ProgressiVis modules, tier 3: `Unary`, `ColsBinary`, `Reduce`, `LinearMap`, `GroupBy`, `Aggregate`, `Join`, `JoinById`, `Switch`; maps with extra table inputs and readiness | ProgressiVis modules | [Progressive modules](#progressive-modules) |
+| ProgressiVis modules, tier 4: `Blobs`, `MVBlobs`, `MinMaxScaler`, `MBKMeans`, `MBKMeansFilter`, `PPCA`, `PPCATransformer`, `KernelDensity`, `TSNE`; bulk updates (`update_rows!`) | ProgressiVis modules | [Progressive modules](#progressive-modules) |
 | Convergence: sources load only while a result downstream needs more data (`converged`), and resume when one does again | TaxiVis | [Convergence](#convergence) |
 
 ## Quick start
@@ -598,6 +599,15 @@ notebooks). Tables flow through ports named `table` (input) and `result`
 | `Join` | inputs `primary` (unique key) and `related`; `on` (or `primary_on` and `related_on`), `how` (`"inner"`, `"outer"`), `primary_columns`, `related_columns`, `suffix` (`"_primary"`) | table: each related row with its primary row's columns; inner: rows wait for their key; outer: `missing` until the key arrives, then filled in (updates) |
 | `JoinById` | several tables on `table` (views of one table) | table of the rows in every input, all columns (clashes: `name_k`) |
 | `Switch` | `condition` (`Bool`; unset: wait) | `result` (rows while true), `result_else` (while false): selection views; a change moves the rows |
+| `Blobs` | `rows` (100 000), `centers` (a number, drawn in `center_box` `[-10, 10]`, or a list of points; 3), `cluster_std` (one, or one per center; 1.0), `columns` (names, or a number n: `_1`…`_n`), `seed` | table of Gaussian blobs (sklearn's `make_blobs`); port `labels`: table `label` (1-based center), row i for row i; same rows whatever the step sizes |
+| `MVBlobs` | `means`, `covs` (one covariance matrix per mean, as rows), `rows`, `columns`, `seed` | multivariate normal blobs; port `labels` |
+| `MinMaxScaler` | inputs `min`, `max` (from `Min`, `Max`); `columns` (default: numeric), `delta` (margin: < 0, % of the extent; -5), `ignore_max` (0), `reset_threshold` (1000) | table: `columns` scaled to [0, 1] with the bounds fixed at the first rows, others passed through; values out by at most `delta` clipped, rows further out dropped (up to `ignore_max`), else a reset (new bounds, all rows again); bound changes reset while ≤ `reset_threshold` rows are out; port `info`: `clipped`, `ignored`, `resets` |
+| `MBKMeans` | `n_clusters`, `columns` (default: numeric), `batch_size` (1024), `tol` (largest center move to converge; 1e-5), `seed`; optional input `moved_center` (`Dict` cluster → coordinates) | table of the centers (one row per cluster, updated in place); port `labels`: table `row` (input row id), `label` (1-based), in passes over the rows as centers move; port `converged` |
+| `MBKMeansFilter` | inputs `table` (data), `labels` (from `MBKMeans`); `cluster` | selection view of the rows of that cluster, following the labels |
+| `PPCA` | `n_components` (2), `columns` (default: numeric) | selection view of the rows fitted; port `transformer`: the `PCAModel` (`components`, `mean`, `explained_variance`, ...), a new one per step (incremental PCA, one SVD per step) |
+| `PPCATransformer` | inputs `table`, `transformer`; `n_components` (as the model's), `rtol` (0.001), `threshold` (rows after which it stops resetting; none), `samples` (100), `seed` | table `_pc1`…: each row projected with the model of the last reset; a model drifting by more than `rtol` (on sample rows) resets: every row projected again, in place |
+| `KernelDensity` | `x_column`, `y_column` (`x`, `y`), `knn` (100), `bandwidth` (0.2), `samples` (points) or `bins` (32: a grid over the points' extent), `threshold` (rows between estimates; 1000) | table `x`, `y`, `density` per sample point, updated in place: mean Gaussian kernel over the k nearest points (exact) |
+| `TSNE` | `columns` (default: numeric), `output_columns` (`["x", "y"]`), `perplexity` (30), `max_iter` (1000 after the last new rows), `iterations` (per step; 1), `theta` (0.5), `learning_rate` (`"auto"`), `early_exaggeration` (12), `exaggeration_iterations` (250), `seed` | table of the embedding, one row per input row, moving in place |
 | `Filter` | `column`, `op` (`<`, `<=`, `>`, `>=`, `==`, `!=`), `value` | table of the matching rows |
 | `Select` | `columns` | table with those columns |
 | `Sink` | — (consumes any input) | port `count`: rows consumed |
@@ -635,6 +645,22 @@ deriving a key column. Not ported: `CombineFirst`, `Paste`, `UniqueIndex`
 (inside `Join`). Loading the January trips (0.11 s) and aggregating by
 passenger count (mean distance, count): 0.29 s; joining every trip with a
 10-row lookup table: 0.57 s.
+
+Tier 4 (analytics) differs from ProgressiVis in: `MBKMeans` labels every
+row (ProgressiVis: only the rows of its mini-batches) in passes that
+restart while the centers move, and seeds with greedy k-means++ on one
+batch as sklearn; `MinMaxScaler` clips and drops rows at every step
+(ProgressiVis only in the step where the bounds changed; its tests are
+skipped as "not ready yet"); `PPCATransformer` re-projects rows in place
+rather than truncating its output; `KernelDensity` and `TSNE` are native
+(ProgressiVis wraps pynene's C++): exact neighbors (a Z-order index of
+sorted runs for the densities; brute force with BLAS for t-SNE, O(N² d):
+practical up to some tens of thousands of rows), Barnes-Hut repulsion for
+2-D embeddings. On the 14.8 M January trips (10 threads, compiled):
+k-means converges in 0.34 s (median of five seeds; ProgressiVis 3.5 s),
+PPCA fits in 1.3 s (2.6 s), MinMaxScaler with Min and Max 0.50 s (9.7 s),
+densities of the pickups at 32² points 2.0 s; t-SNE of 10 000 rows in
+50-D: 8.2 s (`benchmarks/compare/results/analytics/summary.md`).
 
 In a workflow notebook:
 
@@ -742,6 +768,7 @@ t[5, :x]                  # a value
 column(t, :x)             # the column, indexed by row id (AbstractVector)
 t[RowIds([1, 5, 9]), :y]  # values at several ids
 t[5, :x] = 1.0            # update
+update_rows!(t, [3, 7], (x=[0.0, 1.0],))   # update many rows at once
 delete!(t, 10:20)         # delete rows (an id, a range or RowIds)
 row_ids(t), length(t)     # live rows
 Tables.columntable(t)     # a Tables.jl snapshot of the live rows (works with DataFrames, CSV, ...)
@@ -920,6 +947,11 @@ with one `ModuleExec` per module (see [LOGGING.md](LOGGING.md)):
 
 ## Changelog
 
+- **ProgressiVis modules, tier 4 (2026-10-14)**: `Blobs`, `MVBlobs`,
+  `MinMaxScaler`, `MBKMeans`, `MBKMeansFilter`, `PPCA`, `PPCATransformer`
+  (`PCAModel`, `transform`, `inverse_transform`), `KernelDensity`,
+  `TSNE`; `update_rows!` (bulk updates of a table). Tests:
+  `test_analytics_modules.jl`; benchmarks: `benchmarks/compare/analytics.*`.
 - **ProgressiVis modules, tier 3 (2026-10-14)**: `Unary`, `ColsBinary`,
   `Reduce`, `LinearMap`, `GroupBy`, `Aggregate`, `Join`, `JoinById`,
   `Switch`; `define_map_module!` takes `extra_inputs` and `ready`. Fixed: a

@@ -1,0 +1,125 @@
+Precompiling packages...
+   4387.0 ms  ✓ VisTrailsJL
+  1 dependency successfully precompiled in 5 seconds. 304 already precompiled.
+[ Info: Registered module: org.vistrails.vistrails.basic::HTTPFile
+[ Info: Registered module: org.vistrails.vistrails.basic::PythonSource
+[ Info: Registered module: org.vistrails.vistrails.basic::PythonSource
+[ Info: Registered module: org.vistrails.vistrails.basic::Integer
+[ Info: Registered module: org.vistrails.vistrails.basic::Float
+[ Info: Registered module: org.vistrails.vistrails.basic::String
+[ Info: Registered module: org.vistrails.vistrails.basic::Boolean
+[ Info: Registered constant modules: Integer, Float, String, Boolean
+[ Info: Registered module: org.vistrails.vistrails.basic::Tuple
+[ Info: Registered module: org.vistrails.vistrails.basic::Untuple
+[ Info: Registered module: org.vistrails.vistrails.basic::List
+[ Info: Registered module: org.vistrails.vistrails.basic::Round
+[ Info: Registered data structure modules: Tuple, Untuple, List, Round
+[ Info: Registered module: org.vistrails.vistrails.basic::InputPort
+[ Info: Registered module: org.vistrails.vistrails.basic::OutputPort
+[ Info: Registered module: org.vistrails.vistrails.basic::StandardOutput
+[ Info: Registered I/O modules: InputPort, OutputPort, StandardOutput
+[ Info: Registered module: org.vistrails.vistrails.julia::JuliaSource
+[ Info: Registered module: org.vistrails.vistrails.control_flow::If
+[ Info: Registered module: org.vistrails.vistrails.control_flow::While
+[ Info: Registered module: org.vistrails.vistrails.control_flow::And
+[ Info: Registered module: org.vistrails.vistrails.control_flow::Or
+[ Info: Registered module: org.vistrails.vistrails.control_flow::Not
+[ Info: Registered control flow modules: If, While, And, Or, Not
+[ Info: Registered module: org.vistrails.vistrails.control_flow::Sum
+[ Info: Registered module: org.vistrails.vistrails.control_flow::Cross
+[ Info: Registered module: org.vistrails.vistrails.control_flow::Dot
+[ Info: Registered module: org.vistrails.vistrails.control_flow::ElementwiseProduct
+[ Info: Registered vector operation modules: Sum, Cross, Dot, ElementwiseProduct
+[ Info: Registered module: org.vistrails.vistrails.pythoncalc::PythonCalc
+[ Info: Registered module: org.vistrails.vistrails.pythoncalc::PythonCalc
+[ Info: Initializing matplotlib package...
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplFigure
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplFigureOutput
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplLinePlot
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplScatter
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplBar
+[ Info: Registered module: org.vistrails.vistrails.matplotlib::MplHist
+[ Info:   ✓ Matplotlib package initialized
+[ Info:   Registered modules: MplFigure, MplFigureOutput, MplLinePlot, MplScatter, MplBar, MplHist
+[ Info: Registered module: org.vistrails.progressive::RandomTable
+[ Info: Registered module: org.vistrails.progressive::CSVLoader
+[ Info: Registered module: org.vistrails.progressive::ArrowLoader
+[ Info: Registered module: org.vistrails.progressive::ParquetLoader
+[ Info: Registered module: org.vistrails.progressive::Variable
+[ Info: Registered module: org.vistrails.progressive::Sink
+[ Info: Registered module: org.vistrails.progressive::Count
+[ Info: Registered module: org.vistrails.progressive::Min
+[ Info: Registered module: org.vistrails.progressive::Max
+[ Info: Registered module: org.vistrails.progressive::Mean
+[ Info: Registered module: org.vistrails.progressive::Var
+[ Info: Registered module: org.vistrails.progressive::Histogram1D
+[ Info: Registered module: org.vistrails.progressive::Histogram2D
+[ Info: Registered module: org.vistrails.progressive::Quantiles
+[ Info: Registered module: org.vistrails.progressive::KLLSketch
+[ Info: Registered module: org.vistrails.progressive::Histogram1DCategorical
+[ Info: Registered module: org.vistrails.progressive::Distinct
+[ Info: Registered module: org.vistrails.progressive::Corr
+[ Info: Registered module: org.vistrails.progressive::IdxMin
+[ Info: Registered module: org.vistrails.progressive::IdxMax
+[ Info: Registered module: org.vistrails.progressive::Filter
+[ Info: Registered module: org.vistrails.progressive::Select
+[ Info: Registered module: org.vistrails.progressive::Sample
+[ Info: Registered module: org.vistrails.progressive::BinningIndex
+[ Info: Registered module: org.vistrails.progressive::RangeQuery
+[ Info: Registered module: org.vistrails.progressive::RangeQuery2D
+[ Info: Registered module: org.vistrails.progressive::SimpleFilter
+[ Info: Registered module: org.vistrails.progressive::CategoricalQuery
+[ Info: Registered module: org.vistrails.progressive::Intersection
+[ Info: Registered module: org.vistrails.progressive::Percentiles
+[ Info: Registered module: org.vistrails.progressive::Unary
+[ Info: Registered module: org.vistrails.progressive::ColsBinary
+[ Info: Registered module: org.vistrails.progressive::Reduce
+[ Info: Registered module: org.vistrails.progressive::LinearMap
+[ Info: Registered module: org.vistrails.progressive::GroupBy
+[ Info: Registered module: org.vistrails.progressive::Aggregate
+[ Info: Registered module: org.vistrails.progressive::Join
+[ Info: Registered module: org.vistrails.progressive::JoinById
+[ Info: Registered module: org.vistrails.progressive::Switch
+[ Info: Registered module: org.vistrails.progressive::Blobs
+[ Info: Registered module: org.vistrails.progressive::MVBlobs
+[ Info: Registered module: org.vistrails.progressive::MinMaxScaler
+[ Info: Registered module: org.vistrails.progressive::MBKMeans
+[ Info: Registered module: org.vistrails.progressive::MBKMeansFilter
+[ Info: Registered module: org.vistrails.progressive::PPCA
+[ Info: Registered module: org.vistrails.progressive::PPCATransformer
+[ Info: Registered module: org.vistrails.progressive::KernelDensity
+[ Info: Registered module: org.vistrails.progressive::TSNE
+[ Info: Registered module: org.vistrails.bench::ConstantTable
+[ Info: Registered module: org.vistrails.bench::Bounds2D
+Initializing basic package...
+  ✓ Basic package initialized
+Initializing julia package...
+  ✓ Julia package initialized
+Initializing control_flow package...
+  ✓ Control flow package initialized
+Initializing pythoncalc package...
+  ✓ PythonCalc package initialized
+Initializing progressive package...
+  ✓ Progressive package initialized
+RESULT {"workload":"MBKMeans k=10","seed":0,"seconds_converged":1.7145411968231201,"seconds":1.724337100982666,"iterations":28598,"ms_per_iteration":0.05995318542636269,"labelled":200000,"rows":200000,"warmup":true,"threads":10}
+RESULT {"workload":"MBKMeans k=10","seed":0,"seconds_converged":1.522974967956543,"seconds":2.8416709899902344,"iterations":20930,"ms_per_iteration":0.07276516808201353,"labelled":14776615,"rows":14776615,"warmup":false,"threads":10}
+RESULT {"workload":"MBKMeans k=10","seed":1,"seconds_converged":0.22888898849487305,"seconds":0.22891902923583984,"iterations":9877,"ms_per_iteration":0.023173938290459963,"labelled":200000,"rows":200000,"warmup":true,"threads":10}
+RESULT {"workload":"MBKMeans k=10","seed":1,"seconds_converged":0.16831088066101074,"seconds":2.04862904548645,"iterations":859,"ms_per_iteration":0.19593816142143275,"labelled":14776615,"rows":14776615,"warmup":false,"threads":10}
+RESULT {"workload":"MBKMeans k=10","seed":2,"seconds_converged":0.057945966720581055,"seconds":0.057988882064819336,"iterations":1274,"ms_per_iteration":0.04548349036152359,"labelled":200000,"rows":200000,"warmup":true,"threads":10}
+RESULT {"workload":"MBKMeans k=10","seed":2,"seconds_converged":0.21166086196899414,"seconds":1.248661994934082,"iterations":758,"ms_per_iteration":0.2792359656583036,"labelled":14776615,"rows":14776615,"warmup":false,"threads":10}
+RESULT {"workload":"MBKMeans k=10","seed":3,"seconds_converged":0.22913813591003418,"seconds":0.22916412353515625,"iterations":9500,"ms_per_iteration":0.0241198037800036,"labelled":200000,"rows":200000,"warmup":true,"threads":10}
+RESULT {"workload":"MBKMeans k=10","seed":3,"seconds_converged":0.33859682083129883,"seconds":1.2396938800811768,"iterations":4734,"ms_per_iteration":0.0715244657438316,"labelled":14776615,"rows":14776615,"warmup":false,"threads":10}
+RESULT {"workload":"MBKMeans k=10","seed":4,"seconds_converged":0.03423595428466797,"seconds":0.0342710018157959,"iterations":1072,"ms_per_iteration":0.03193652451927982,"labelled":200000,"rows":200000,"warmup":true,"threads":10}
+RESULT {"workload":"MBKMeans k=10","seed":4,"seconds_converged":0.9109678268432617,"seconds":1.5571317672729492,"iterations":15367,"ms_per_iteration":0.05928078524391629,"labelled":14776615,"rows":14776615,"warmup":false,"threads":10}
+RESULT {"workload":"PPCA (fit)","seconds":0.5185761451721191,"rows":200000,"warmup":true,"threads":10}
+RESULT {"workload":"PPCA (fit)","seconds":1.2918860912322998,"rows":14776615,"warmup":false,"threads":10}
+RESULT {"workload":"PPCA + PPCATransformer","seconds":0.5562219619750977,"projected":200000,"resets":0,"rows":200000,"warmup":true,"threads":10}
+RESULT {"workload":"PPCA + PPCATransformer","seconds":2.755605936050415,"projected":14776615,"resets":11,"rows":14776615,"warmup":false,"threads":10}
+RESULT {"workload":"MinMaxScaler (+ Min, Max)","seconds":0.807750940322876,"scaled":200000,"info":{"clipped":0,"ignored":0,"resets":0},"rows":200000,"warmup":true,"threads":10}
+RESULT {"workload":"MinMaxScaler (+ Min, Max)","seconds":0.498046875,"scaled":14776615,"info":{"clipped":0,"ignored":0,"resets":2},"rows":14776615,"warmup":false,"threads":10}
+RESULT {"workload":"Blobs","rows":200000,"seconds":0.2824420928955078,"warmup":true,"threads":10}
+RESULT {"workload":"Blobs","rows":14776615,"seconds":0.23126602172851562,"warmup":false,"threads":10}
+RESULT {"workload":"KernelDensity (pickups, 32² samples)","seconds":0.8431880474090576,"rows":200000,"warmup":true,"threads":10}
+RESULT {"workload":"KernelDensity (pickups, 32² samples)","seconds":2.033273935317993,"rows":14776615,"warmup":false,"threads":10}
+RESULT {"workload":"TSNE (50-D blobs)","rows":1000,"seconds":5.229722023010254,"iterations":1000,"warmup":true,"threads":10}
+RESULT {"workload":"TSNE (50-D blobs)","rows":10000,"seconds":20.369451999664307,"iterations":1009,"warmup":false,"threads":10}

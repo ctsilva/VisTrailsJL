@@ -304,6 +304,37 @@ function Base.setindex!(t::ProgressiveTable, value, id::Integer, name::Symbol)
 end
 
 """
+    update_rows!(t, ids::AbstractVector{<:Integer}, data::NamedTuple)
+
+`t[id, name] = value` for many live rows: `data` holds, for some of the
+table's columns, one value per id. Takes the lock once and reports the rows
+as updated in one go (e.g. an embedding moving every row at each step).
+"""
+function update_rows!(t::ProgressiveTable, ids::AbstractVector{<:Integer}, data::NamedTuple)
+    is_view(t) && throw(ArgumentError("update_rows! on a selection view: update its base table"))
+    isempty(ids) && return t
+    all(v -> length(v) == length(ids), data) || throw(DimensionMismatch("one value per row id is needed"))
+    set = RowIds(ids)
+    cols = [column(t, n) for n in keys(data)]
+    @lock t.lock begin
+        (first(set) >= 1 && last(set) <= last_id(t) && isempty(intersect(set, t.deleted))) ||
+            throw(ArgumentError("rows $(collect(setdiff(set, live_ids(t)))) do not exist or were deleted"))
+        foreach((col, v) -> write_values!(col, ids, v), cols, values(data))
+        for sub in t.subscriptions
+            union!(sub.updated, setdiff(set, sub.created))
+        end
+    end
+    return t
+end
+
+# Function barrier: a column and values of known types
+function write_values!(col::SegmentedColumn, ids::AbstractVector{<:Integer}, v::AbstractVector)
+    @inbounds for (i, id) in enumerate(ids)
+        col[id] = v[i]
+    end
+end
+
+"""
     delete!(t::ProgressiveTable, ids)
 
 Delete live rows (an id, a range or an `RowIds`). Subscribers that had not

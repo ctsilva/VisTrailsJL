@@ -1,0 +1,8 @@
+Starting scheduler
+# Scheduler added module(s): ['const_dict_1', 'constant_1', 'max_1', 'min_1', 'min_max_scaler_1', 'sink_1']
+Leaving run loop
+{"workload": "MinMaxScaler (+ Min, Max)", "rows": 14776615, "seconds": 9.677708916016854, "scaled": 14776615}
+Starting scheduler
+# Scheduler added module(s): ['blobs_p_table_1', 'sink_1']
+Leaving run loop
+{"workload": "Blobs", "rows": 14776615, "seconds": 1.0133137080119923}
